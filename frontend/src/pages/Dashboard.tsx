@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Folder, ClipboardList, CheckCircle } from 'lucide-react';
+import { Folder } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<any[]>([]);

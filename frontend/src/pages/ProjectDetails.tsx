@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { ClipboardList, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 const ProjectDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();

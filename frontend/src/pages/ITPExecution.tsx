@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
-import { CheckCircle, AlertCircle, Clock, PlusCircle, XCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, Camera } from 'lucide-react';
 
 const ITPExecution: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -115,7 +115,6 @@ const ITPExecution: React.FC = () => {
       <div className="points-list">
         {itp?.points.map((point: any) => {
           const isSignedOff = ['Approved', 'Closed'].includes(point.status);
-          const hasOpenNcr = point.ncrs?.some((n: any) => n.status !== 'Closed' && n.status !== 'Verified');
           
           return (
             <div key={point.id} className={`point-card ${isSignedOff ? 'signed-off' : ''} ${point.status === 'Rejected' ? 'rejected-card' : ''}`}>

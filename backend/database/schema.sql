@@ -44,6 +44,11 @@ CREATE TABLE itp_template_points (
     sequence INTEGER NOT NULL,
     description TEXT NOT NULL,
     type point_type NOT NULL,
+    acceptance_criteria TEXT,
+    reference_documents TEXT,
+    inspection_method TEXT,
+    frequency TEXT,
+    responsible_party TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -70,6 +75,11 @@ CREATE TABLE itp_points (
     description TEXT NOT NULL,
     type point_type NOT NULL,
     status point_status DEFAULT 'Open',
+    acceptance_criteria TEXT,
+    reference_documents TEXT,
+    inspection_method TEXT,
+    frequency TEXT,
+    responsible_party TEXT,
     signed_off_by INTEGER REFERENCES users(id),
     signed_off_at TIMESTAMP WITH TIME ZONE,
     comments TEXT,
