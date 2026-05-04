@@ -36,7 +36,7 @@ CREATE TABLE itp_templates (
 );
 
 -- ITP Template Points
-CREATE TYPE point_type AS ENUM ('HP', 'WP', 'RP', 'SP');
+CREATE TYPE point_type AS ENUM ('HP', 'WP', 'RP', 'SP', 'IP');
 
 CREATE TABLE itp_template_points (
     id SERIAL PRIMARY KEY,
@@ -49,6 +49,9 @@ CREATE TABLE itp_template_points (
     inspection_method TEXT,
     frequency TEXT,
     responsible_party TEXT,
+    section VARCHAR(255),
+    verifying_records TEXT,
+    approver_role_id INTEGER REFERENCES roles(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -62,6 +65,11 @@ CREATE TABLE itp_instances (
     name VARCHAR(255) NOT NULL,
     status itp_status DEFAULT 'Draft',
     created_by INTEGER REFERENCES users(id),
+    lot_number VARCHAR(100),
+    revision VARCHAR(10),
+    drawing_ref TEXT,
+    panel_no VARCHAR(100),
+    closure_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -80,6 +88,9 @@ CREATE TABLE itp_points (
     inspection_method TEXT,
     frequency TEXT,
     responsible_party TEXT,
+    section VARCHAR(255),
+    verifying_records TEXT,
+    approver_role_id INTEGER REFERENCES roles(id),
     signed_off_by INTEGER REFERENCES users(id),
     signed_off_at TIMESTAMP WITH TIME ZONE,
     comments TEXT,
@@ -93,8 +104,21 @@ CREATE TABLE ncr_defects (
     id SERIAL PRIMARY KEY,
     itp_point_id INTEGER REFERENCES itp_points(id),
     description TEXT NOT NULL,
+    title VARCHAR(255),
+    category VARCHAR(100),
     status ncr_status DEFAULT 'Open',
     created_by INTEGER REFERENCES users(id),
+    reported_to TEXT,
+    client_contact TEXT,
+    contractor_contact TEXT,
+    root_cause TEXT,
+    proposed_disposition TEXT,
+    proposed_completion_date TEXT,
+    corrective_action TEXT,
+    rectification_complete TEXT,
+    verified_by_contractor TEXT,
+    verified_by_client TEXT,
+    closing_remarks TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP WITH TIME ZONE
 );

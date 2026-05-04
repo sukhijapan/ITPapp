@@ -4,28 +4,33 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 export class ItpAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // 1. VPC - Configured for absolute minimum cost
+    // ── 1. VPC — minimum cost, public subnets only ──────────────────────
     const vpc = new ec2.Vpc(this, 'ItpVpc', {
       maxAzs: 2,
       natGateways: 0,
       subnetConfiguration: [
-        {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        }
+        { name: 'Public', subnetType: ec2.SubnetType.PUBLIC },
       ],
     });
 
-    // 2. Storage for Media & Reports
+    // S3 Gateway Endpoint — free, allows VPC Lambda to reach S3
+    vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+
+    // ── 2. S3 Buckets ───────────────────────────────────────────────────
     const storageBucket = new s3.Bucket(this, 'ItpStorage', {
       versioned: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -37,7 +42,17 @@ export class ItpAppStack extends cdk.Stack {
       }],
     });
 
-    // 3. Frontend Hosting
+    // Notification bucket — VPC Lambda drops JSON here, triggers non-VPC Lambda
+    const notificationBucket = new s3.Bucket(this, 'NotificationBucket', {
+      versioned: false,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      lifecycleRules: [
+        { expiration: cdk.Duration.days(7), prefix: 'ncr/' }, // auto-cleanup
+      ],
+    });
+
+    // ── 3. Frontend ─────────────────────────────────────────────────────
     const frontendBucket = new s3.Bucket(this, 'ItpFrontendBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -51,20 +66,11 @@ export class ItpAppStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
     });
 
-    // Deploy Frontend
     new s3_deployment.BucketDeployment(this, 'DeployFrontend', {
       sources: [s3_deployment.Source.asset('../frontend/dist')],
       destinationBucket: frontendBucket,
@@ -72,12 +78,12 @@ export class ItpAppStack extends cdk.Stack {
       distributionPaths: ['/*'],
     });
 
-    // 4. Security Groups
+    // ── 4. Security Groups ──────────────────────────────────────────────
     const lambdaSG = new ec2.SecurityGroup(this, 'LambdaSG', { vpc });
     const dbSG = new ec2.SecurityGroup(this, 'DbSG', { vpc });
     dbSG.addIngressRule(lambdaSG, ec2.Port.tcp(5432), 'Allow Lambda access to Postgres');
 
-    // 5. RDS Database
+    // ── 5. RDS Database ─────────────────────────────────────────────────
     const database = new rds.DatabaseInstance(this, 'ItpDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.of('16.6', '16') }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
@@ -91,7 +97,40 @@ export class ItpAppStack extends cdk.Stack {
       backupRetention: cdk.Duration.days(1),
     });
 
-    // 6. Backend Lambda
+    // ── 6. SNS Topic + Email Subscription ───────────────────────────────
+    const ncrTopic = new sns.Topic(this, 'NcrNotificationTopic', {
+      displayName: 'ITP NCR Notifications',
+      topicName: 'itp-ncr-notifications',
+    });
+
+    ncrTopic.addSubscription(
+      new subscriptions.EmailSubscription('eddyk@ozcc.com.au')
+    );
+
+    // ── 7. Notifier Lambda (OUTSIDE VPC — can reach SNS directly) ───────
+    const notifier = new lambda.Function(this, 'NcrNotifier', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('../infrastructure/lambda/notifier'),
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 128,
+      environment: {
+        SNS_TOPIC_ARN: ncrTopic.topicArn,
+        FRONTEND_URL: 'https://applications.ozcc.com.au',
+      },
+    });
+
+    ncrTopic.grantPublish(notifier);
+    notificationBucket.grantRead(notifier);
+
+    // Trigger notifier when a JSON file lands in ncr/ prefix
+    notificationBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(notifier),
+      { prefix: 'ncr/', suffix: '.json' },
+    );
+
+    // ── 8. Backend Lambda (IN VPC — writes to S3 for notifications) ─────
     const backend = new lambda.Function(this, 'ItpBackend', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'src/index.handler',
@@ -100,28 +139,39 @@ export class ItpAppStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       allowPublicSubnet: true,
       securityGroups: [lambdaSG],
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 1024,
+      timeout: cdk.Duration.seconds(90),
+      memorySize: 2048,
       environment: {
         DB_HOST: database.instanceEndpoint.hostname,
         DB_NAME: 'itpapp',
         DB_USER: 'postgres',
         DB_PASSWORD: database.secret!.secretValueFromJson('password').unsafeUnwrap(),
         STORAGE_BUCKET: storageBucket.bucketName,
+        NOTIFICATION_BUCKET: notificationBucket.bucketName,
         NODE_ENV: 'production',
         JWT_SECRET: 'your_production_jwt_secret',
-        FRONTEND_URL: `https://${distribution.distributionDomainName}`,
+        FRONTEND_URL: 'https://applications.ozcc.com.au',
       },
     });
 
-    // 7. Lambda Function URL
+    storageBucket.grantReadWrite(backend);
+    notificationBucket.grantWrite(backend); // only needs to put objects
+
+    // ── 9. Lambda Function URL ──────────────────────────────────────────
     const fnUrl = backend.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
-      // CORS is handled by Express middleware — don't duplicate it here
+      cors: {
+        allowedOrigins: [
+          `https://${distribution.distributionDomainName}`,
+          'https://applications.ozcc.com.au',
+        ],
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        allowCredentials: true,
+        maxAge: cdk.Duration.hours(24),
+      },
     });
 
-    // Explicitly grant public access to the Function URL
-    // Since Oct 2025, Function URLs require both InvokeFunctionUrl AND InvokeFunction
     backend.addPermission('PublicInvoke', {
       principal: new iam.AnyPrincipal(),
       action: 'lambda:InvokeFunctionUrl',
@@ -132,21 +182,20 @@ export class ItpAppStack extends cdk.Stack {
       action: 'lambda:InvokeFunction',
     });
 
-    storageBucket.grantReadWrite(backend);
-
-    // Outputs
+    // ── Outputs ─────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: fnUrl.url,
       description: 'The URL of the Backend API',
     });
-
     new cdk.CfnOutput(this, 'FrontendUrl', {
       value: `https://${distribution.distributionDomainName}`,
       description: 'The URL of the Frontend',
     });
-
     new cdk.CfnOutput(this, 'FrontendBucketName', {
       value: frontendBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'NotificationBucketName', {
+      value: notificationBucket.bucketName,
     });
   }
 }
