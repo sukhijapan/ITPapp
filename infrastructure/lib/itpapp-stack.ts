@@ -9,8 +9,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 export class ItpAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -97,17 +95,7 @@ export class ItpAppStack extends cdk.Stack {
       backupRetention: cdk.Duration.days(1),
     });
 
-    // ── 6. SNS Topic + Email Subscription ───────────────────────────────
-    const ncrTopic = new sns.Topic(this, 'NcrNotificationTopic', {
-      displayName: 'ITP NCR Notifications',
-      topicName: 'itp-ncr-notifications',
-    });
-
-    ncrTopic.addSubscription(
-      new subscriptions.EmailSubscription('eddyk@ozcc.com.au')
-    );
-
-    // ── 7. Notifier Lambda (OUTSIDE VPC — can reach SNS directly) ───────
+    // ── 6. Notifier Lambda (OUTSIDE VPC — sends HTML email via SES) ─────
     const notifier = new lambda.Function(this, 'NcrNotifier', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
@@ -115,12 +103,19 @@ export class ItpAppStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(15),
       memorySize: 128,
       environment: {
-        SNS_TOPIC_ARN: ncrTopic.topicArn,
         FRONTEND_URL: 'https://applications.ozcc.com.au',
+        SES_FROM_EMAIL: 'noreply@emails.ozcc.com.au',
+        SES_TO_EMAIL: 'eddyk@ozcc.com.au',
+        AWS_SES_REGION: 'ap-southeast-2',
       },
     });
 
-    ncrTopic.grantPublish(notifier);
+    // Grant SES send permission
+    notifier.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }));
+
     notificationBucket.grantRead(notifier);
 
     // Trigger notifier when a JSON file lands in ncr/ prefix

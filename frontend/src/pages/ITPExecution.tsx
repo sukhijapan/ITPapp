@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { CheckCircle, Clock, XCircle, Camera, FileDown, AlertTriangle, ShieldCheck, Send } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, FileDown, AlertTriangle, ShieldCheck, Send, Paperclip, FileText, FileSpreadsheet, File } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_NAMES: Record<number, string> = {
@@ -444,18 +444,39 @@ const ITPExecution: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Media */}
+                    {/* Media & Attachments */}
                     <div className="media-section">
                       <div className="media-grid">
-                        {point.media?.map((m: any) => (
-                          <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="media-thumb">
-                            <img src={m.url} alt="attachment" />
-                          </a>
-                        ))}
+                        {point.media?.map((m: any) => {
+                          const isImage = m.file_type?.startsWith('image/');
+                          const fileName = m.file_path?.split('/').pop() || 'file';
+                          const ext = fileName.split('.').pop()?.toLowerCase() || '';
+                          const iconForExt = () => {
+                            if (['pdf'].includes(ext)) return <FileDown size={24} />;
+                            if (['doc', 'docx'].includes(ext)) return <FileText size={24} />;
+                            if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={24} />;
+                            return <File size={24} />;
+                          };
+                          return isImage ? (
+                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="media-thumb">
+                              <img src={m.url} alt="attachment" />
+                            </a>
+                          ) : (
+                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="media-file">
+                              {iconForExt()}
+                              <span className="media-file-name">{fileName.length > 20 ? fileName.slice(0, 17) + '…' + ext : fileName}</span>
+                            </a>
+                          );
+                        })}
                         {!isSignedOff && (
-                          <label className="upload-btn">
-                            {uploadingPointId === point.id ? '…' : <Camera size={24} />}
-                            <input type="file" accept="image/*" capture="environment" onChange={e => handleFileUpload(point.id, e)} hidden />
+                          <label className="upload-btn" title="Upload photo, PDF, document, spreadsheet or text file">
+                            {uploadingPointId === point.id ? '…' : <Paperclip size={24} />}
+                            <input
+                              type="file"
+                              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
+                              onChange={e => handleFileUpload(point.id, e)}
+                              hidden
+                            />
                           </label>
                         )}
                       </div>

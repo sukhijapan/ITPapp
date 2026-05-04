@@ -1434,3 +1434,37 @@ header button {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
+
+/* ── File attachment display (non-image) ─────────────────────────────────── */
+.media-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--primary);
+  transition: border-color 0.15s, background 0.15s;
+  padding: 4px;
+}
+.media-file:hover {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+.media-file svg {
+  flex-shrink: 0;
+}
+.media-file-name {
+  font-size: 0.6rem;
+  color: var(--text-light);
+  text-align: center;
+  margin-top: 2px;
+  word-break: break-all;
+  line-height: 1.2;
+  max-height: 2.4em;
+  overflow: hidden;
+}
