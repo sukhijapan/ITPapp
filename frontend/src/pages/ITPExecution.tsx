@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { CheckCircle, Clock, XCircle, FileDown, AlertTriangle, ShieldCheck, Send, Paperclip, FileText, FileSpreadsheet, File } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, FileDown, AlertTriangle, ShieldCheck, Send, Paperclip, FileText, FileSpreadsheet, File, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_NAMES: Record<number, string> = {
@@ -145,17 +145,34 @@ const ITPExecution: React.FC = () => {
   const handleFileUpload = async (pointId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('itp_point_id', pointId.toString());
     setUploadingPointId(pointId);
     try {
-      await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      // Get presigned URL from backend
+      const { data } = await api.post('/media/upload-url', {
+        filename: file.name,
+        contentType: file.type || '',
+        itp_point_id: pointId,
+      });
+      // Upload directly to S3 using presigned URL (no Content-Type header to avoid signature mismatch)
+      await fetch(data.uploadUrl, {
+        method: 'PUT',
+        body: file,
+      });
       fetchITP();
     } catch {
       alert('Failed to upload file');
     } finally {
       setUploadingPointId(null);
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId: number) => {
+    if (!confirm('Remove this attachment?')) return;
+    try {
+      await api.delete(`/media/${mediaId}`);
+      fetchITP();
+    } catch {
+      alert('Failed to delete attachment');
     }
   };
 
@@ -457,15 +474,28 @@ const ITPExecution: React.FC = () => {
                             if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={24} />;
                             return <File size={24} />;
                           };
-                          return isImage ? (
-                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="media-thumb">
-                              <img src={m.url} alt="attachment" />
-                            </a>
-                          ) : (
-                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className="media-file">
-                              {iconForExt()}
-                              <span className="media-file-name">{fileName.length > 20 ? fileName.slice(0, 17) + '…' + ext : fileName}</span>
-                            </a>
+                          return (
+                            <div key={m.id} className="media-item-wrapper">
+                              {isImage ? (
+                                <a href={m.url} target="_blank" rel="noreferrer" className="media-thumb">
+                                  <img src={m.url} alt="attachment" />
+                                </a>
+                              ) : (
+                                <a href={m.url} target="_blank" rel="noreferrer" className="media-file">
+                                  {iconForExt()}
+                                  <span className="media-file-name">{fileName.length > 20 ? fileName.slice(0, 17) + '…' + ext : fileName}</span>
+                                </a>
+                              )}
+                              {!isSignedOff && (
+                                <button
+                                  className="media-delete-btn"
+                                  onClick={() => handleDeleteMedia(m.id)}
+                                  title="Remove attachment"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                         {!isSignedOff && (

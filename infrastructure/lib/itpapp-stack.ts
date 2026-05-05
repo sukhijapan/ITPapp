@@ -46,7 +46,8 @@ export class ItpAppStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [
-        { expiration: cdk.Duration.days(7), prefix: 'ncr/' }, // auto-cleanup
+        { expiration: cdk.Duration.days(7), prefix: 'ncr/' },
+        { expiration: cdk.Duration.days(7), prefix: 'email/' },
       ],
     });
 
@@ -118,11 +119,12 @@ export class ItpAppStack extends cdk.Stack {
 
     notificationBucket.grantRead(notifier);
 
-    // Trigger notifier when a JSON file lands in ncr/ prefix
+    // Trigger notifier when any JSON file lands in the notification bucket
+    // The Lambda routes by key prefix: ncr/ for NCR emails, email/ for onboarding emails
     notificationBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(notifier),
-      { prefix: 'ncr/', suffix: '.json' },
+      { suffix: '.json' },
     );
 
     // ── 8. Backend Lambda (IN VPC — writes to S3 for notifications) ─────
@@ -146,11 +148,21 @@ export class ItpAppStack extends cdk.Stack {
         NODE_ENV: 'production',
         JWT_SECRET: 'your_production_jwt_secret',
         FRONTEND_URL: 'https://applications.ozcc.com.au',
+        APP_URL: 'https://applications.ozcc.com.au',
+        EMAIL_TRANSPORT: 'ses',
+        SES_REGION: 'ap-southeast-2',
+        SES_FROM_EMAIL: 'noreply@emails.ozcc.com.au',
       },
     });
 
     storageBucket.grantReadWrite(backend);
     notificationBucket.grantWrite(backend); // only needs to put objects
+
+    // Grant SES send permission for user onboarding emails
+    backend.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: ['*'],
+    }));
 
     // ── 9. Lambda Function URL ──────────────────────────────────────────
     const fnUrl = backend.addFunctionUrl({

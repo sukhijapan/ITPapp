@@ -2,12 +2,16 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import ProjectDetails from './pages/ProjectDetails';
 import ITPExecution from './pages/ITPExecution';
 import TemplateBuilder from './pages/TemplateBuilder';
 import NCRList from './pages/NCRList';
 import NCRDetail from './pages/NCRDetail';
+import UserManagement from './pages/UserManagement';
 import './App.css';
 
 function App() {
@@ -16,6 +20,9 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register/:token" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route
             path="/"
             element={
@@ -61,6 +68,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <NCRDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute>
+                <UserManagement />
               </ProtectedRoute>
             }
           />

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Folder, FileText, AlertOctagon, CheckCircle2, Clock, ShieldAlert } from 'lucide-react';
+import { Folder, FileText, AlertOctagon, CheckCircle2, Clock, ShieldAlert, Users } from 'lucide-react';
 
 interface Stats {
   total_itps: number;
@@ -43,10 +43,18 @@ const Dashboard: React.FC = () => {
     <div className="dashboard">
       <header>
         <div>
-          <h1>Welcome, {user?.username}</h1>
+          <h1>Welcome, {user?.full_name}</h1>
           <p className="user-role-label">{roleName[user?.role_id ?? 0] ?? 'Unknown Role'}</p>
         </div>
-        <button onClick={logout}>Logout</button>
+        <div className="header-actions">
+          {user?.role_id === 4 && (
+            <Link to="/admin/users" className="btn-secondary">
+              <Users size={18} />
+              User Management
+            </Link>
+          )}
+          <button onClick={logout}>Logout</button>
+        </div>
       </header>
 
       {stats && (

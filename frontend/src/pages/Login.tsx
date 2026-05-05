@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -45,6 +45,9 @@ const Login: React.FC = () => {
           />
         </div>
         <button type="submit">Login</button>
+        <p style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
       </form>
     </div>
   );
