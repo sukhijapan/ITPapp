@@ -37,7 +37,25 @@ jobs:
           cd ../frontend && npm ci
 
       - name: Run database migrations
-        run: node backend/src/migrate-logic.js
+        run: |
+          PGPASSWORD=password psql -h localhost -U postgres -d itpapp -f backend/database/schema.sql
+          node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ host: 'localhost', user: 'postgres', password: 'password', database: 'itpapp', port: 5432 });
+            const fs = require('fs');
+            const path = require('path');
+            const migrationsDir = path.join('backend', 'database', 'migrations');
+            const files = fs.readdirSync(migrationsDir).sort();
+            (async () => {
+              for (const file of files) {
+                if (!file.endsWith('.sql')) continue;
+                const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+                await pool.query(sql);
+                console.log('Applied:', file);
+              }
+              await pool.end();
+            })();
+          "
         env:
           DB_HOST: localhost
           DB_USER: postgres
@@ -59,6 +77,8 @@ jobs:
           JWT_SECRET: e2e-test-secret
           NODE_ENV: test
           APP_URL: http://localhost:5173
+          S3_BUCKET: test-bucket
+          CI: true
 
       - name: Upload test artifacts
         if: failure()
