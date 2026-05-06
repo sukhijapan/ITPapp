@@ -111,10 +111,10 @@ test.describe('ITP Execution @critical', () => {
   });
 
   test('should auto-change ITP status to Closed when all points are signed off', async ({
-    headContractorContext,
+    adminContext,
   }) => {
-    // Arrange
-    const page = await headContractorContext.newPage();
+    // Arrange — use Admin (role 4) who can sign off all points regardless of role restriction
+    const page = await adminContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
     // Act — navigate to the Open ITP and sign off all points sequentially

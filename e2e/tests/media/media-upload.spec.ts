@@ -32,6 +32,12 @@ function createTestPngBuffer(): Buffer {
 }
 
 test.describe('Media Upload @regression', () => {
+  // Skip media upload tests when AWS credentials are not available (e.g., CI without S3)
+  test.skip(
+    !process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE,
+    'Skipping media upload tests — AWS credentials not configured'
+  );
+
   test('should create a media record associated with the correct point when uploading a file', async ({
     subcontractorContext,
   }) => {

@@ -29,6 +29,8 @@ export class WitnessPointResponsePage {
 
   async goto(token: string) {
     await this.page.goto(`/wp-response/${token}`);
+    // Wait for the page to finish loading (either shows content or error)
+    await this.page.waitForSelector('h1, .bg-red-50', { timeout: 10000 });
   }
 
   async getNotificationContext(): Promise<string> {

@@ -13,7 +13,7 @@ export class RegisterPage {
     this.page = page;
     this.passwordInput = page.locator('input[type="password"]');
     this.submitButton = page.locator('button[type="submit"]');
-    this.errorMessage = page.locator('.error');
+    this.errorMessage = page.locator('.error, h1:has-text("Invalid Link"), h1:has-text("Invitation Expired")');
     this.successMessage = page.locator('h1', { hasText: 'Complete Registration' });
     this.fullNameInput = page.locator('input[aria-label="Full name"]');
     this.emailInput = page.locator('input[aria-label="Email address"]');
