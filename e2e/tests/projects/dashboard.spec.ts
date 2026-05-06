@@ -21,7 +21,7 @@ test.describe('Project Management - Dashboard', () => {
 
     // Assert — stat cards display expected statistics
     await expect(dashboardPage.statCards.first()).toBeVisible();
-    const statLabels = ['Open ITPs', 'Blocking HPs', 'Open NCRs', 'Pending Review', 'Closed ITPs'];
+    const statLabels = ['Open ITPs', 'Blocking Hold Points', 'Open NCRs', 'Pending Review', 'Closed ITPs'];
     for (const label of statLabels) {
       await expect(page.locator('.stat-card', { hasText: label })).toBeVisible();
     }

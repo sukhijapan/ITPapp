@@ -1,10 +1,12 @@
 import { test, expect } from '../../fixtures/auth.fixture';
 import { RegisterPage } from '../../pages/register.page';
 import { Pool } from 'pg';
+import crypto from 'crypto';
 
 /**
  * Helper to create an invitation token directly in the database.
- * Returns the token string that can be used to navigate to /register/{token}.
+ * Returns the raw token string that can be used to navigate to /register/{token}.
+ * The DB stores the SHA-256 hash of the token (matching invitationService behavior).
  */
 async function createInvitationToken(
   email: string,
@@ -20,20 +22,28 @@ async function createInvitationToken(
   });
 
   try {
-    const token = `e2e-invite-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Generate a raw token and store its SHA-256 hash (matches invitationService)
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expires = expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
+    // Get an admin user ID for the invited_by field
+    const adminResult = await pool.query(
+      `SELECT id FROM users WHERE email = 'e2e-admin@test.local' LIMIT 1`
+    );
+    const invitedBy = adminResult.rows[0]?.id || 1;
+
     await pool.query(
-      `INSERT INTO invitations (email, role_id, token, expires_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO invitations (email, role_id, token, expires_at, invited_by, full_name, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        ON CONFLICT (token) DO UPDATE SET
          email = EXCLUDED.email,
          role_id = EXCLUDED.role_id,
          expires_at = EXCLUDED.expires_at`,
-      [email, roleId, token, expires]
+      [email, roleId, tokenHash, expires, invitedBy, 'E2E Test User']
     );
 
-    return token;
+    return rawToken;
   } finally {
     await pool.end();
   }

@@ -30,9 +30,10 @@ async function requestResetAndGetToken(email: string): Promise<string> {
 
   try {
     const result = await pool.query(
-      `SELECT token FROM password_resets
-       WHERE email = $1
-       ORDER BY created_at DESC
+      `SELECT pr.token FROM password_resets pr
+       JOIN users u ON u.id = pr.user_id
+       WHERE u.email = $1
+       ORDER BY pr.created_at DESC
        LIMIT 1`,
       [email]
     );

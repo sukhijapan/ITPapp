@@ -306,6 +306,39 @@ export async function seedTestData(): Promise<void> {
       );
     }
 
+    // --- Seed public library templates (for template library tests) ---
+    await pool.query(`DELETE FROM itp_template_points WHERE template_id >= 200 AND template_id < 300`);
+    await pool.query(`DELETE FROM itp_templates WHERE id >= 200 AND id < 300`);
+
+    await pool.query(
+      `INSERT INTO itp_templates (id, name, description, trade_category, is_public, version, created_by_org, clone_count)
+       VALUES (200, 'Bulk Earthworks (Civil)', 'Comprehensive ITP for excavation, placement, and compaction.', 'Earthworks', true, '1.0', 'CivilStandard', 120),
+              (201, 'Bridge Abutment Concrete', 'Detailed inspection for high-strength structural concrete.', 'Concrete', true, '1.1', 'CivilStandard', 85),
+              (202, 'Structural Steel Erection', 'ITP for assembly and erection of structural steel members.', 'Steel', true, '1.0', 'CivilStandard', 45)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         trade_category = EXCLUDED.trade_category,
+         is_public = EXCLUDED.is_public`
+    );
+
+    // Seed a few points for each library template
+    const libraryPoints = [
+      { templateId: 200, seq: 1, desc: 'Survey set-out and ground levels', type: 'HP' },
+      { templateId: 200, seq: 2, desc: 'Proof rolling of subgrade', type: 'HP' },
+      { templateId: 201, seq: 1, desc: 'Reinforcement placement and spacing', type: 'HP' },
+      { templateId: 201, seq: 2, desc: 'Formwork stability and cleanliness', type: 'WP' },
+      { templateId: 202, seq: 1, desc: 'Material traceability / Mill certificates', type: 'RP' },
+      { templateId: 202, seq: 2, desc: 'Bolt tensioning', type: 'HP' },
+    ];
+
+    for (const lp of libraryPoints) {
+      await pool.query(
+        `INSERT INTO itp_template_points (template_id, sequence, description, type)
+         VALUES ($1, $2, $3, $4)`,
+        [lp.templateId, lp.seq, lp.desc, lp.type]
+      );
+    }
+
     console.log('✓ E2E test data seeded successfully');
   } finally {
     await pool.end();

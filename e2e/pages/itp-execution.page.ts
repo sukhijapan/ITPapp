@@ -27,6 +27,8 @@ export class ITPExecutionPage {
 
   async goto(itpId: number | string) {
     await this.page.goto(`/itp/${itpId}`);
+    // Wait for the ITP page to load (either shows header or error)
+    await this.page.waitForSelector('.itp-header, .error-banner', { timeout: 15000 });
   }
 
   async getStatus(): Promise<string> {

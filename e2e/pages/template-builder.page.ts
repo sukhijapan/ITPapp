@@ -8,6 +8,7 @@ export class TemplateBuilderPage {
   readonly saveButton: Locator;
   readonly errorBanner: Locator;
   readonly pointRows: Locator;
+  private pointsAdded = 0;
 
   constructor(page: Page) {
     this.page = page;
@@ -21,6 +22,7 @@ export class TemplateBuilderPage {
 
   async goto(projectId: number | string) {
     await this.page.goto(`/projects/${projectId}/templates/new`);
+    this.pointsAdded = 0;
   }
 
   async fillTemplate(name: string, description: string) {
@@ -29,7 +31,12 @@ export class TemplateBuilderPage {
   }
 
   async addPoint(type: string, description: string, criteria: string) {
-    await this.addPointButton.click();
+    // The page starts with 1 empty point. Only click "Add Point" after the first one.
+    if (this.pointsAdded > 0) {
+      await this.addPointButton.click();
+    }
+    this.pointsAdded++;
+
     const lastPoint = this.pointRows.last();
     await lastPoint.locator('.col-desc input').fill(description);
     await lastPoint.locator('.col-type select').selectOption(type);

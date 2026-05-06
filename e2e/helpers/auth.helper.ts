@@ -7,7 +7,12 @@ const AUTH_DIR = path.join(process.cwd(), '.playwright', '.auth');
 
 export type UserRole = 'subcontractor' | 'headContractor' | 'client' | 'admin';
 
-export async function authenticateRole(role: UserRole): Promise<string> {
+interface LoginResponse {
+  token: string;
+  user: { id: number; full_name: string; email: string; role_id: number };
+}
+
+export async function authenticateRole(role: UserRole): Promise<LoginResponse> {
   const user = TEST_USERS[role];
   const context = await request.newContext({
     baseURL: 'http://localhost:3000',
@@ -19,16 +24,17 @@ export async function authenticateRole(role: UserRole): Promise<string> {
 
   const body = await response.json();
   await context.dispose();
-  return body.token;
+  return body as LoginResponse;
 }
 
 export async function setupAuthState(role: UserRole): Promise<string> {
   const storageFile = path.join(AUTH_DIR, `${role}.json`);
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 
-  const token = await authenticateRole(role);
+  const { token, user } = await authenticateRole(role);
 
-  // Store as Playwright storage state format
+  // Store as Playwright storage state format — user object must match
+  // the shape expected by AuthContext: { id, full_name, email, role_id }
   const storageState = {
     cookies: [],
     origins: [
@@ -36,7 +42,7 @@ export async function setupAuthState(role: UserRole): Promise<string> {
         origin: 'http://localhost:5173',
         localStorage: [
           { name: 'token', value: token },
-          { name: 'user', value: JSON.stringify(TEST_USERS[role]) },
+          { name: 'user', value: JSON.stringify(user) },
         ],
       },
     ],
