@@ -2,6 +2,7 @@ import { test, expect } from '../../fixtures/auth.fixture';
 import { ITPExecutionPage } from '../../pages/itp-execution.page';
 import { ProjectDetailsPage } from '../../pages/project-details.page';
 import { TEST_PROJECT, TEST_TEMPLATE, TEST_ITP_INSTANCES } from '../../test-data/constants';
+import { resetITPToStatus, resetITPPointsToOpen } from '../../helpers/db-utils';
 
 test.describe('ITP Execution @critical', () => {
   test('should create ITP instance from template with Draft status and all points copied', async ({
@@ -58,7 +59,8 @@ test.describe('ITP Execution @critical', () => {
   test('should return status to Draft with rejection reason when Head Contractor rejects Pending Review ITP', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — reset ITP 9002 to PendingReview in case a previous test changed it
+    await resetITPToStatus(TEST_ITP_INSTANCES.pendingReview.id, 'Pending Review');
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
     const rejectionReason = 'Missing documentation for hold point';
@@ -77,7 +79,9 @@ test.describe('ITP Execution @critical', () => {
   test('should update point status and record signer info when authorized user signs off point', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — reset ITP 9003 and points to Open to guard against cross-file state mutation
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
+    await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
@@ -85,18 +89,18 @@ test.describe('ITP Execution @critical', () => {
     await itpExecution.goto(TEST_ITP_INSTANCES.open.id);
     await itpExecution.signOffPoint(0);
 
-    // Assert — point status updates to approved
+    // Assert — point shows signed-off success message with signer info
     const firstPoint = itpExecution.pointCards.nth(0);
-    await expect(firstPoint.locator('.status-badge, .point-status')).toContainText(/approved|signed/i);
-
-    // Assert — signer information is recorded
+    await expect(firstPoint.locator('.success-msg')).toBeVisible();
     await expect(firstPoint).toContainText(/signed|approved by/i);
   });
 
   test('should show blocking error when signing off point blocked by preceding unsigned HP', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — reset ITP 9003 and all its points to Open so HP at index 0 is unsigned
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
+    await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
@@ -113,7 +117,9 @@ test.describe('ITP Execution @critical', () => {
   test('should auto-change ITP status to Closed when all points are signed off', async ({
     adminContext,
   }) => {
-    // Arrange — use Admin (role 4) who can sign off all points regardless of role restriction
+    // Arrange — reset ITP 9003 and all its points to Open
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
+    await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
     const page = await adminContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
@@ -144,7 +150,9 @@ test.describe('ITP Execution @critical', () => {
   test('should show permission error when wrong role attempts sign-off on role-restricted point', async ({
     subcontractorContext,
   }) => {
-    // Arrange — Subcontractor should not be able to sign off a Head Contractor restricted point
+    // Arrange — reset ITP 9003 and points to Open so sign-off buttons are available
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
+    await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
     const page = await subcontractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 

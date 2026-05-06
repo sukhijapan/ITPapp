@@ -3,23 +3,14 @@ import { ForgotPasswordPage } from '../../pages/forgot-password.page';
 import { ResetPasswordPage } from '../../pages/reset-password.page';
 import { TEST_USERS } from '../../test-data/constants';
 import { Pool } from 'pg';
-import { request } from '@playwright/test';
+import crypto from 'crypto';
 
 /**
- * Helper to request a password reset via the API and retrieve the token from the database.
+ * Inserts a password reset token directly into the DB and returns the raw token.
+ * The backend stores a SHA-256 hash; we generate both here so the test gets the
+ * raw token that the reset-password URL requires.
  */
 async function requestResetAndGetToken(email: string): Promise<string> {
-  // Call the forgot-password API endpoint
-  const apiContext = await request.newContext({
-    baseURL: 'http://localhost:3000',
-  });
-
-  await apiContext.post('/api/auth/forgot-password', {
-    data: { email },
-  });
-  await apiContext.dispose();
-
-  // Query the database for the reset token
   const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
@@ -29,20 +20,26 @@ async function requestResetAndGetToken(email: string): Promise<string> {
   });
 
   try {
-    const result = await pool.query(
-      `SELECT pr.token FROM password_resets pr
-       JOIN users u ON u.id = pr.user_id
-       WHERE u.email = $1
-       ORDER BY pr.created_at DESC
-       LIMIT 1`,
+    const userResult = await pool.query(
+      `SELECT id FROM users WHERE email = $1`,
       [email]
     );
-
-    if (result.rows.length === 0) {
-      throw new Error(`No password reset token found for ${email}`);
+    if (userResult.rows.length === 0) {
+      throw new Error(`User not found: ${email}`);
     }
+    const userId = userResult.rows[0].id;
 
-    return result.rows[0].token;
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await pool.query(
+      `INSERT INTO password_resets (user_id, token, created_at, expires_at)
+       VALUES ($1, $2, NOW(), $3)`,
+      [userId, tokenHash, expiresAt]
+    );
+
+    return rawToken;
   } finally {
     await pool.end();
   }

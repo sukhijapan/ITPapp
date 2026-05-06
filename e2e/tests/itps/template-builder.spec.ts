@@ -68,15 +68,10 @@ test.describe('ITP Template Builder', () => {
     await projectDetails.goto(TEST_PROJECT.id);
     await expect(projectDetails.templateSection).toContainText(templateName);
 
-    // Act — delete the template
+    // Act — delete the template (button is icon-only; uses native browser confirm dialog)
     const templateRow = projectDetails.templateSection.locator('.list-item', { hasText: templateName });
-    await templateRow.locator('button', { hasText: /delete/i }).click();
-
-    // Confirm deletion if a confirmation dialog appears
-    const confirmButton = page.locator('button', { hasText: /confirm|yes|delete/i });
-    if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmButton.click();
-    }
+    page.on('dialog', dialog => dialog.accept());
+    await templateRow.locator('button[title="Delete template"]').click();
 
     // Assert — template no longer appears in the list
     await expect(projectDetails.templateSection).not.toContainText(templateName);

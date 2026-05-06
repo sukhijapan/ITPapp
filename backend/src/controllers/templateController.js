@@ -14,7 +14,6 @@ exports.createTemplate = async (req, res) => {
       );
       if (existing.rows.length > 0) {
         await client.query('ROLLBACK');
-        client.release();
         return res.status(409).json({ error: `A template named "${name}" already exists in this project.` });
       }
     }

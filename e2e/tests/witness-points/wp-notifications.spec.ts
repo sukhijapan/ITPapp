@@ -3,6 +3,7 @@ import { WitnessPointResponsePage } from '../../pages/witness-point-response.pag
 import { TEST_USERS, TEST_ITP_INSTANCES } from '../../test-data/constants';
 import { Pool } from 'pg';
 import { request } from '@playwright/test';
+import { resetITPToStatus } from '../../helpers/db-utils';
 
 /**
  * Creates a DB pool with standard test connection settings.
@@ -77,7 +78,7 @@ async function seedNotificationWithToken(options: {
       `INSERT INTO wp_notification_recipients (notification_id, user_id, email, recipient_name, is_external)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [notificationId, recipientId, TEST_USERS.headContractor.email, TEST_USERS.headContractor.fullName, options.isExpired || options.isUsed ? true : false]
+      [notificationId, recipientId, TEST_USERS.headContractor.email, TEST_USERS.headContractor.fullName, true]
     );
     const recipientRecordId = recipResult.rows[0].id;
 
@@ -104,6 +105,8 @@ test.describe('Witness Point Notifications', () => {
   test('Subcontractor raises WP notification with planned time and recipients — status is Pending', async ({
     subcontractorContext,
   }) => {
+    // Ensure ITP 9003 is Open so the backend accepts notification creation
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     const pool = createPool();
     try {
       const pointId = await getWitnessPointId(pool);
@@ -158,6 +161,7 @@ test.describe('Witness Point Notifications', () => {
     headContractorContext,
   }) => {
     // Arrange — create a notification first
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     const pool = createPool();
     try {
       const creatorId = await getUserId(pool, TEST_USERS.subcontractor.email);
@@ -214,6 +218,7 @@ test.describe('Witness Point Notifications', () => {
     subcontractorContext,
   }) => {
     // Arrange — create a notification
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     const pool = createPool();
     try {
       const creatorId = await getUserId(pool, TEST_USERS.subcontractor.email);
@@ -269,7 +274,8 @@ test.describe('Witness Point Notifications', () => {
   test('external recipient accesses response page via valid token URL — context displayed and response submittable', async ({
     page,
   }) => {
-    // Arrange — seed notification with a valid token
+    // Arrange — ensure ITP 9003 is Open, then seed notification with a valid token
+    await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     const { token } = await seedNotificationWithToken({ isExpired: false, isUsed: false });
 
     // Act — navigate to the response page
