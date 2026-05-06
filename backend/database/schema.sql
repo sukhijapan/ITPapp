@@ -32,6 +32,11 @@ CREATE TABLE itp_templates (
     project_id INTEGER REFERENCES projects(id),
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    trade_category VARCHAR(100),
+    is_public BOOLEAN DEFAULT false,
+    version VARCHAR(20) DEFAULT '1.0',
+    created_by_org VARCHAR(255),
+    clone_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

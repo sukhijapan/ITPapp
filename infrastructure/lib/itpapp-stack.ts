@@ -9,10 +9,18 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 
 export class ItpAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Secrets are sourced from environment variables at CDK synth time.
+    // For POC/dev, fallback to placeholder values if not set.
+    const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-me';
+    const internalApiSecret = process.env.INTERNAL_API_SECRET || 'dev-internal-secret-change-me';
+    const adminApiKey = process.env.ADMIN_API_KEY || 'dev-admin-key-change-me';
 
     // ── 1. VPC — minimum cost, public subnets only ──────────────────────
     const vpc = new ec2.Vpc(this, 'ItpVpc', {
@@ -41,6 +49,7 @@ export class ItpAppStack extends cdk.Stack {
     });
 
     // Notification bucket — VPC Lambda drops JSON here, triggers non-VPC Lambda
+    // Lifecycle: transition to Glacier after 90 days for compliance audit trail; no hard deletion
     const notificationBucket = new s3.Bucket(this, 'NotificationBucket', {
       versioned: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -48,6 +57,7 @@ export class ItpAppStack extends cdk.Stack {
       lifecycleRules: [
         { expiration: cdk.Duration.days(7), prefix: 'ncr/' },
         { expiration: cdk.Duration.days(7), prefix: 'email/' },
+        { expiration: cdk.Duration.days(7), prefix: 'wp-notification/' },
       ],
     });
 
@@ -146,7 +156,8 @@ export class ItpAppStack extends cdk.Stack {
         STORAGE_BUCKET: storageBucket.bucketName,
         NOTIFICATION_BUCKET: notificationBucket.bucketName,
         NODE_ENV: 'production',
-        JWT_SECRET: 'your_production_jwt_secret',
+        JWT_SECRET: jwtSecret,
+        ADMIN_API_KEY: adminApiKey,
         FRONTEND_URL: 'https://applications.ozcc.com.au',
         APP_URL: 'https://applications.ozcc.com.au',
         EMAIL_TRANSPORT: 'ses',
@@ -189,6 +200,93 @@ export class ItpAppStack extends cdk.Stack {
       action: 'lambda:InvokeFunction',
     });
 
+    // ── 10. WP Timer Lambda (OUTSIDE VPC — calls backend API) ───────────
+    // Use a fixed function name so we can reference the ARN from the backend Lambda
+    // without creating a CloudFormation dependency (which would cause a circular dep).
+    const wpTimerFunctionName = `${this.stackName}-WpTimerHandler`;
+
+    const wpTimerHandler = new lambda.Function(this, 'WpTimerHandler', {
+      functionName: wpTimerFunctionName,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('../infrastructure/lambda/wp-timer'),
+      timeout: cdk.Duration.seconds(60),
+      memorySize: 128,
+      environment: {
+        INTERNAL_API_SECRET: internalApiSecret,
+      },
+    });
+
+    // ── 11. WP Timer Sweep Lambda (OUTSIDE VPC — queries DB and calls backend) ──
+    const wpTimerSweep = new lambda.Function(this, 'WpTimerSweep', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'sweep.handler',
+      code: lambda.Code.fromAsset('../infrastructure/lambda/wp-timer'),
+      timeout: cdk.Duration.seconds(120),
+      memorySize: 256,
+      environment: {
+        INTERNAL_API_SECRET: internalApiSecret,
+        DATABASE_URL: `postgresql://postgres:${database.secret!.secretValueFromJson('password').unsafeUnwrap()}@${database.instanceEndpoint.hostname}:5432/itpapp`,
+      },
+    });
+
+    // wp-timer Lambdas call the backend via its public Function URL (authType: NONE)
+    // No IAM invoke permissions needed — they use HTTP requests with internal secret header
+
+    // ── 12. EventBridge Scheduler IAM Role ──────────────────────────────
+    // Role assumed by EventBridge Scheduler to invoke the wp-timer Lambda.
+    // We use the pre-determined ARN string to avoid circular dependencies.
+    const schedulerRole = new iam.Role(this, 'WpSchedulerRole', {
+      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+      description: 'Role for EventBridge Scheduler to invoke WP Timer Lambda',
+      inlinePolicies: {
+        InvokeWpTimer: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['lambda:InvokeFunction'],
+              resources: [`arn:aws:lambda:${this.region}:${this.account}:function:${wpTimerFunctionName}`],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Grant backend Lambda permissions to create/delete EventBridge schedules
+    backend.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'scheduler:CreateSchedule',
+        'scheduler:DeleteSchedule',
+        'scheduler:GetSchedule',
+      ],
+      resources: ['*'],
+    }));
+
+    // Grant backend Lambda permission to pass the scheduler role to EventBridge Scheduler
+    backend.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['iam:PassRole'],
+      resources: [schedulerRole.roleArn],
+    }));
+
+    // Add scheduler-related environment variables to backend Lambda.
+    // Use the pre-determined function name to construct the ARN string directly,
+    // avoiding a CloudFormation-level dependency from backend → wpTimerHandler.
+    const wpTimerLambdaArn = `arn:aws:lambda:${this.region}:${this.account}:function:${wpTimerFunctionName}`;
+    backend.addEnvironment('WP_TIMER_LAMBDA_ARN', wpTimerLambdaArn);
+    backend.addEnvironment('WP_SCHEDULER_ROLE_ARN', schedulerRole.roleArn);
+    backend.addEnvironment('INTERNAL_API_SECRET', internalApiSecret);
+
+    // Set BACKEND_URL on timer Lambdas using the Function URL.
+    wpTimerHandler.addEnvironment('BACKEND_URL', fnUrl.url);
+    wpTimerSweep.addEnvironment('BACKEND_URL', fnUrl.url);
+
+    // ── 13. EventBridge Rule — Sweep every 5 minutes ────────────────────
+    const sweepRule = new events.Rule(this, 'WpTimerSweepRule', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
+      description: 'Triggers WP timer sweep Lambda every 5 minutes to catch missed expirations',
+    });
+
+    sweepRule.addTarget(new events_targets.LambdaFunction(wpTimerSweep));
+
     // ── Outputs ─────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: fnUrl.url,
@@ -203,6 +301,14 @@ export class ItpAppStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'NotificationBucketName', {
       value: notificationBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'WpTimerLambdaArn', {
+      value: wpTimerHandler.functionArn,
+      description: 'ARN of the WP Timer Lambda function',
+    });
+    new cdk.CfnOutput(this, 'WpSchedulerRoleArn', {
+      value: schedulerRole.roleArn,
+      description: 'ARN of the EventBridge Scheduler role for WP timers',
     });
   }
 }

@@ -48,7 +48,9 @@ const UserManagement: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const res = await api.get('/users');
-      setUsers(res.data);
+      const payload = res.data;
+      // Backend returns paginated { data: [...], total, page, pageSize }
+      setUsers(Array.isArray(payload) ? payload : payload.data || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch users');
     }

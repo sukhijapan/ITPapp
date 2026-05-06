@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import React, { useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, Clock, XCircle, FileDown, AlertTriangle, ShieldCheck, Send, Paperclip, FileText, FileSpreadsheet, File, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import NotificationPanel from '../components/NotificationPanel';
+import { useITPExecution } from '../hooks/useITPExecution';
+import type { ITPPoint } from '../types/api.types';
 
 const ROLE_NAMES: Record<number, string> = {
   1: 'Subcontractor',
@@ -14,246 +16,22 @@ const ROLE_NAMES: Record<number, string> = {
 const ITPExecution: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [itp, setItp] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [ncrPointId, setNcrPointId] = useState<number | null>(null);
-  const [ncrDescription, setNcrDescription] = useState('');
-  const [uploadingPointId, setUploadingPointId] = useState<number | null>(null);
-  const [workflowLoading, setWorkflowLoading] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [showRejectForm, setShowRejectForm] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-  // Bug 3: rejection choice — 'choose' | 'comment' | 'ncr'
-  const [rejectPointId, setRejectPointId] = useState<number | null>(null);
-  const [rejectMode, setRejectMode] = useState<'choose' | 'comment' | 'ncr'>('choose');
-  const [rejectComment, setRejectComment] = useState('');
 
-  useEffect(() => { fetchITP(); }, [id]);
+  const {
+    itp, loading, error,
+    rejectPointId, rejectMode, setRejectMode, rejectComment, setRejectComment,
+    ncrDescription, setNcrDescription, ncrPointId, setNcrPointId, cancelReject,
+    uploadingPointId,
+    workflowLoading, rejectReason, setRejectReason, showRejectForm, setShowRejectForm, exportingPdf,
+    requestSignOffPointId, setRequestSignOffPointId, externalEmail, setExternalEmail,
+    externalRole, setExternalRole, requesting,
+    fetchITP, handleSignOff, handleRejectWithComment, handleRejectWithNCR,
+    handleCreateNCR, handleResolveNCR, handleFileUpload, handleDeleteMedia,
+    handleSubmitForReview, handleApproveITP, handleRejectITP,
+    handleExportPdf, handleRequestExternalSignOff, navigate,
+  } = useITPExecution(id);
 
-  const fetchITP = async () => {
-    try {
-      // 1 request: ITP instance + points + NCRs (all in one SQL query — no fan-out)
-      const itpRes = await api.get(`/itps/instances/${id}`);
-      const itpData = itpRes.data;
-
-      // 1 request: all media for the instance (replaces N per-point requests)
-      let allMedia: any[] = [];
-      try {
-        const mediaRes = await api.get(`/media/instance/${id}`);
-        allMedia = mediaRes.data;
-      } catch (mediaErr) {
-        console.warn('Media fetch failed (non-fatal):', mediaErr);
-      }
-
-      // Map media to their points client-side
-      const mediaByPoint: Record<number, any[]> = {};
-      for (const m of allMedia) {
-        if (!mediaByPoint[m.itp_point_id]) mediaByPoint[m.itp_point_id] = [];
-        mediaByPoint[m.itp_point_id].push(m);
-      }
-
-      const pointsData = itpData.points.map((point: any) => ({
-        ...point,
-        ncrs:  Array.isArray(point.ncrs) ? point.ncrs : [],
-        media: mediaByPoint[point.id] ?? [],
-      }));
-
-      setItp({ ...itpData, points: pointsData });
-    } catch (err: any) {
-      console.error('Failed to fetch ITP', err);
-      const msg = err.response?.data?.error || err.message || 'Unknown error';
-      setError(`Failed to load ITP: ${msg}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignOff = async (pointId: number, status: string) => {
-    if (status === 'Rejected') {
-      // Bug 3: Show rejection choice — NCR or comment-only
-      setRejectPointId(pointId);
-      setRejectMode('choose');
-      setRejectComment('');
-      setNcrDescription('');
-      return;
-    }
-    try {
-      setError('');
-      await api.post(`/itps/points/${pointId}/sign-off`, { status, comments: 'Signed off from web interface' });
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Sign-off failed');
-    }
-  };
-
-  // Bug 3: Reject with comment only (no NCR — non-blocking additional info request)
-  const handleRejectWithComment = async () => {
-    if (!rejectPointId) return;
-    try {
-      setError('');
-      await api.post(`/itps/points/${rejectPointId}/sign-off`, {
-        status: 'Rejected',
-        comments: rejectComment || 'Additional information required',
-      });
-      setRejectPointId(null);
-      setRejectComment('');
-      setRejectMode('choose');
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Rejection failed');
-    }
-  };
-
-  // Bug 3: Reject with NCR (blocking non-conformance)
-  const handleRejectWithNCR = async () => {
-    if (!rejectPointId) return;
-    try {
-      setError('');
-      await api.post('/ncrs', { itp_point_id: rejectPointId, description: ncrDescription });
-      setRejectPointId(null);
-      setNcrDescription('');
-      setRejectMode('choose');
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create NCR');
-    }
-  };
-
-  const handleCreateNCR = async () => {
-    try {
-      setError('');
-      await api.post('/ncrs', { itp_point_id: ncrPointId, description: ncrDescription });
-      setNcrPointId(null);
-      setNcrDescription('');
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create NCR');
-    }
-  };
-
-  const handleResolveNCR = async (ncrId: number) => {
-    try {
-      await api.post(`/ncrs/${ncrId}/resolve`);
-      fetchITP();
-    } catch (err) {
-      console.error('Failed to resolve NCR', err);
-    }
-  };
-
-  const handleFileUpload = async (pointId: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingPointId(pointId);
-    try {
-      // Get presigned URL from backend
-      const { data } = await api.post('/media/upload-url', {
-        filename: file.name,
-        contentType: file.type || '',
-        itp_point_id: pointId,
-      });
-      // Upload directly to S3 using presigned URL (no Content-Type header to avoid signature mismatch)
-      await fetch(data.uploadUrl, {
-        method: 'PUT',
-        body: file,
-      });
-      fetchITP();
-    } catch {
-      alert('Failed to upload file');
-    } finally {
-      setUploadingPointId(null);
-    }
-  };
-
-  const handleDeleteMedia = async (mediaId: number) => {
-    if (!confirm('Remove this attachment?')) return;
-    try {
-      await api.delete(`/media/${mediaId}`);
-      fetchITP();
-    } catch {
-      alert('Failed to delete attachment');
-    }
-  };
-
-  // Feature 2: Workflow actions
-  const handleSubmitForReview = async () => {
-    setWorkflowLoading(true);
-    try {
-      setError('');
-      await api.post(`/itps/instances/${id}/submit`);
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to submit for review');
-    } finally {
-      setWorkflowLoading(false);
-    }
-  };
-
-  const handleApproveITP = async () => {
-    setWorkflowLoading(true);
-    try {
-      setError('');
-      await api.post(`/itps/instances/${id}/approve`);
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to approve ITP');
-    } finally {
-      setWorkflowLoading(false);
-    }
-  };
-
-  const handleRejectITP = async () => {
-    setWorkflowLoading(true);
-    try {
-      setError('');
-      await api.post(`/itps/instances/${id}/reject`, { reason: rejectReason });
-      setShowRejectForm(false);
-      setRejectReason('');
-      fetchITP();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to reject ITP');
-    } finally {
-      setWorkflowLoading(false);
-    }
-  };
-
-  // Feature 4: PDF export
-  const handleExportPdf = async () => {
-    setExportingPdf(true);
-    try {
-      const response = await api.get(`/itps/instances/${id}/report`, { responseType: 'blob' });
-      // Check if the response is actually a JSON error (server returned 200 with error)
-      const contentType = String(response.headers['content-type'] || '');
-      if (contentType.includes('application/json')) {
-        const text = await (response.data as Blob).text();
-        const json = JSON.parse(text);
-        setError(json.error || 'Failed to generate PDF.');
-        return;
-      }
-      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ITP_${itp?.name?.replace(/[^a-z0-9]/gi, '_') ?? id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      // When responseType is 'blob', axios error.response.data is a Blob — parse it
-      if (err.response?.data instanceof Blob) {
-        try {
-          const text = await err.response.data.text();
-          const json = JSON.parse(text);
-          setError(json.error || 'Failed to generate PDF. Try again later.');
-        } catch {
-          setError('Failed to generate PDF. Try again later.');
-        }
-      } else {
-        setError(err.response?.data?.error || 'Failed to generate PDF. Try again later.');
-      }
-    } finally {
-      setExportingPdf(false);
-    }
-  };
+  useEffect(() => { fetchITP(); }, [fetchITP]);
 
   if (loading) return <div className="loading">Loading ITP Details...</div>;
   if (!itp) return (
@@ -265,10 +43,10 @@ const ITPExecution: React.FC = () => {
   );
 
   const userRoleId = user?.role_id ?? 0;
-  const canApproveITP = [2, 3, 4].includes(userRoleId); // HC, Client, Admin
+  const canApproveITP = [2, 3, 4].includes(userRoleId);
   const itpIsOpen = itp.status === 'Open';
 
-  const groupedPoints: Record<string, any[]> = itp.points.reduce((acc: any, point: any) => {
+  const groupedPoints: Record<string, ITPPoint[]> = itp.points.reduce((acc: Record<string, ITPPoint[]>, point: ITPPoint) => {
     const section = point.section || 'General';
     if (!acc[section]) acc[section] = [];
     acc[section].push(point);
@@ -295,7 +73,6 @@ const ITPExecution: React.FC = () => {
         </div>
       </header>
 
-      {/* Feature 2: Workflow status banner */}
       {itp.status === 'Draft' && (
         <div className="workflow-banner draft">
           <AlertTriangle size={18} />
@@ -362,10 +139,8 @@ const ITPExecution: React.FC = () => {
           <div key={section} className="section-group">
             <h2 className="section-title">{section}</h2>
             <div className="points-list">
-              {groupedPoints[section].map((point: any) => {
+              {groupedPoints[section].map((point: ITPPoint) => {
                 const isSignedOff = ['Approved', 'Closed'].includes(point.status);
-
-                // Feature 1: can the current user sign off this point?
                 const requiredRoleId = point.approver_role_id;
                 const canSignOff = itpIsOpen && !isSignedOff && (
                   !requiredRoleId || userRoleId === 4 || userRoleId === requiredRoleId
@@ -392,6 +167,17 @@ const ITPExecution: React.FC = () => {
                       </div>
                     </div>
 
+                    {point.type === 'WP' && (
+                      <div style={{ margin: '0.5rem 0' }}>
+                        <NotificationPanel
+                          pointId={point.id}
+                          pointType={point.type}
+                          itpStatus={itp.status}
+                          projectId={itp.project_id}
+                        />
+                      </div>
+                    )}
+
                     <div className="point-meta-grid">
                       <div className="meta-item">
                         <label>Acceptance Criteria</label>
@@ -414,8 +200,8 @@ const ITPExecution: React.FC = () => {
                             <CheckCircle size={16} />
                             <div style={{ flex: 1 }}>
                               <span>
-                                Signed off by <strong>{point.signed_off_by_name || 'Unknown'}</strong>
-                                {point.signed_off_by_role ? ` (${point.signed_off_by_role})` : ''}
+                                Signed off by <strong>{point.signed_off_by_name || point.external_signer_email || 'Unknown'}</strong>
+                                {point.signed_off_by_role ? ` (${point.signed_off_by_role})` : point.is_external_sign_off ? ' (External)' : ''}
                                 {point.signed_off_at ? ` on ${new Date(point.signed_off_at).toLocaleString()}` : ''}
                               </span>
                               {point.comments && point.comments !== 'Signed off from web interface' && (
@@ -430,8 +216,8 @@ const ITPExecution: React.FC = () => {
                             <XCircle size={16} />
                             <div style={{ flex: 1 }}>
                               <span>
-                                Rejected by <strong>{point.signed_off_by_name || 'Unknown'}</strong>
-                                {point.signed_off_by_role ? ` (${point.signed_off_by_role})` : ''}
+                                Rejected by <strong>{point.signed_off_by_name || point.external_signer_email || 'Unknown'}</strong>
+                                {point.signed_off_by_role ? ` (${point.signed_off_by_role})` : point.is_external_sign_off ? ' (External)' : ''}
                                 {point.signed_off_at ? ` on ${new Date(point.signed_off_at).toLocaleString()}` : ''}
                               </span>
                               {point.comments && (
@@ -451,6 +237,25 @@ const ITPExecution: React.FC = () => {
                         ) : (
                           <div className="pending-msg"><Clock size={16} /> Pending Approval</div>
                         )}
+                        {/* Pending external sign-off indicator */}
+                        {point.pending_external_email && !isSignedOff && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.25rem', padding: '0.3rem 0.6rem', marginTop: '0.25rem' }}>
+                            <Send size={13} />
+                            <span>External sign-off requested from <strong>{point.pending_external_email}</strong> ({point.pending_external_role})</span>
+                          </div>
+                        )}
+                        {itpIsOpen && !isSignedOff && !requestSignOffPointId && (
+                          <button
+                            onClick={() => {
+                              setRequestSignOffPointId(point.id);
+                              setExternalRole(ROLE_NAMES[point.approver_role_id!] || 'Client');
+                            }}
+                            className="btn-external-request"
+                            title="Request sign-off from someone without an account"
+                          >
+                            <Send size={14} /> Request External Sign-off
+                          </button>
+                        )}
                       </div>
 
                       {canSignOff && (
@@ -461,10 +266,48 @@ const ITPExecution: React.FC = () => {
                       )}
                     </div>
 
+                      {requestSignOffPointId === point.id && (
+                        <div className="ncr-form external-request-form" style={{ maxWidth: '400px' }}>
+                          <h4>Request External Sign-off</h4>
+                          <form onSubmit={handleRequestExternalSignOff}>
+                            <div className="form-row">
+                              <label>Signer Email</label>
+                              <input
+                                type="email"
+                                required
+                                value={externalEmail}
+                                onChange={e => setExternalEmail(e.target.value)}
+                                placeholder="e.g. client@example.com"
+                              />
+                            </div>
+                            <div className="form-row">
+                              <label>Signer Role</label>
+                              <select
+                                required
+                                value={externalRole}
+                                onChange={e => setExternalRole(e.target.value)}
+                              >
+                                <option value="Client">Client</option>
+                                <option value="Superintendent">Superintendent</option>
+                                <option value="Head Contractor">Head Contractor</option>
+                                <option value="Third-Party Inspector">Third-Party Inspector</option>
+                                <option value="Design Engineer">Design Engineer</option>
+                              </select>
+                            </div>
+                            <div className="form-actions">
+                              <button type="submit" disabled={requesting} className="btn-save">
+                                {requesting ? 'Sending...' : 'Send Link'}
+                              </button>
+                              <button type="button" onClick={() => setRequestSignOffPointId(null)} className="btn-cancel">Cancel</button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
+
                     {/* Media & Attachments */}
                     <div className="media-section">
                       <div className="media-grid">
-                        {point.media?.map((m: any) => {
+                        {point.media?.map((m) => {
                           const isImage = m.file_type?.startsWith('image/');
                           const fileName = m.file_path?.split('/').pop() || 'file';
                           const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -475,7 +318,7 @@ const ITPExecution: React.FC = () => {
                             return <File size={24} />;
                           };
                           return (
-                            <div key={m.id} className="media-item-wrapper">
+                            <div key={m.id} className="media-item-wrapper" title={m.latitude && m.longitude ? `GPS: ${Number(m.latitude).toFixed(6)}, ${Number(m.longitude).toFixed(6)}` : undefined}>
                               {isImage ? (
                                 <a href={m.url} target="_blank" rel="noreferrer" className="media-thumb">
                                   <img src={m.url} alt="attachment" />
@@ -487,11 +330,7 @@ const ITPExecution: React.FC = () => {
                                 </a>
                               )}
                               {!isSignedOff && (
-                                <button
-                                  className="media-delete-btn"
-                                  onClick={() => handleDeleteMedia(m.id)}
-                                  title="Remove attachment"
-                                >
+                                <button className="media-delete-btn" onClick={() => handleDeleteMedia(m.id)} title="Remove attachment">
                                   <Trash2 size={14} />
                                 </button>
                               )}
@@ -516,7 +355,7 @@ const ITPExecution: React.FC = () => {
                     {point.ncrs?.length > 0 && (
                       <div className="ncr-section">
                         <h4>NCRs / Defects</h4>
-                        {point.ncrs.map((ncr: any) => (
+                        {point.ncrs.map((ncr) => (
                           <div
                             key={ncr.id}
                             className={`ncr-item ncr-item--clickable ${ncr.status.toLowerCase()}`}
@@ -532,8 +371,7 @@ const ITPExecution: React.FC = () => {
                             )}
                           </div>
                         ))}
-                        {/* Hint when all NCRs resolved — the regular Sign Off button handles re-approval */}
-                        {point.status === 'Rejected' && point.ncrs.every((n: any) => n.status === 'Closed' || n.status === 'Verified') && (
+                        {point.status === 'Rejected' && point.ncrs.every((n) => n.status === 'Closed' || n.status === 'Verified') && (
                           <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <CheckCircle size={16} color="#16a34a" />
                             <span style={{ fontSize: '0.85rem', color: '#166534' }}>All NCRs resolved. This point can now be signed off.</span>
@@ -542,7 +380,7 @@ const ITPExecution: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Create NCR form — legacy, kept for backward compat */}
+                    {/* Create NCR form */}
                     {ncrPointId === point.id && (
                       <div className="ncr-form">
                         <h4>Raise Non-Conformance (NCR)</h4>
@@ -554,7 +392,7 @@ const ITPExecution: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Bug 3: Rejection choice — NCR or comment-only */}
+                    {/* Rejection choice modal */}
                     {rejectPointId === point.id && (
                       <div className="ncr-form">
                         {rejectMode === 'choose' && (
@@ -579,7 +417,7 @@ const ITPExecution: React.FC = () => {
                               </button>
                             </div>
                             <div className="form-actions" style={{ marginTop: '0.5rem' }}>
-                              <button onClick={() => { setRejectPointId(null); setRejectMode('choose'); }} className="btn-cancel">Cancel</button>
+                              <button onClick={cancelReject} className="btn-cancel">Cancel</button>
                             </div>
                           </>
                         )}
