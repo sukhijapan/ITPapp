@@ -26,7 +26,7 @@ const Dashboard: React.FC = () => {
           api.get('/projects'),
           api.get('/projects/stats'),
         ]);
-        setProjects(projectRes.data);
+        setProjects(Array.isArray(projectRes.data) ? projectRes.data : projectRes.data.data || []);
         setStats(statsRes.data);
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);

@@ -38,11 +38,14 @@ yarn-error.log*
 .DS_Store
 
 # CDK
-*.js
-!jest.config.js
-!infrastructure/bin/*.ts
-!infrastructure/lib/*.ts
 infrastructure/bin/*.js
 infrastructure/lib/*.js
 infrastructure/bin/*.d.ts
 infrastructure/lib/*.d.ts
+!jest.config.js
+!infrastructure/bin/*.ts
+!infrastructure/lib/*.ts
+
+# Playwright
+.playwright/
+e2e/.auth/

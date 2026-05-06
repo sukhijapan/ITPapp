@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Library, Trash2, XCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import WPConfigSection from '../components/WPConfigSection';
 
 interface CreateFormState {
   name: string;
@@ -22,6 +24,7 @@ const emptyForm: CreateFormState = {
 const ProjectDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [project, setProject] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
   const [instances, setInstances] = useState<any[]>([]);
@@ -90,6 +93,36 @@ const ProjectDetails: React.FC = () => {
     }
   };
 
+  const handleDeleteTemplate = async (templateId: number, templateName: string) => {
+    if (!confirm(`Delete template "${templateName}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/templates/${templateId}`);
+      setTemplates(prev => prev.filter(t => t.id !== templateId));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete template');
+    }
+  };
+
+  const handleDeactivateITP = async (instanceId: number, instanceName: string) => {
+    if (!confirm(`Deactivate ITP "${instanceName}"? It will be marked as Closed and cannot be executed further.`)) return;
+    try {
+      await api.post(`/itps/instances/${instanceId}/deactivate`);
+      setInstances(prev => prev.map(i => i.id === instanceId ? { ...i, status: 'Closed' } : i));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to deactivate ITP');
+    }
+  };
+
+  const handleDeleteITP = async (instanceId: number, instanceName: string) => {
+    if (!confirm(`⚠️ PERMANENTLY DELETE ITP "${instanceName}"?\n\nThis will delete all points, NCRs, media, and audit logs. This cannot be undone.`)) return;
+    try {
+      await api.delete(`/itps/instances/${instanceId}`);
+      setInstances(prev => prev.filter(i => i.id !== instanceId));
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete ITP');
+    }
+  };
+
   if (loading) return <div className="loading">Loading project...</div>;
 
   return (
@@ -103,9 +136,14 @@ const ProjectDetails: React.FC = () => {
       <section className="section">
         <div className="section-header">
           <h2>ITP Templates</h2>
-          <Link to={`/projects/${id}/templates/new`} className="btn-small btn-primary">
-            <Plus size={16} /> Create Template
-          </Link>
+          <div className="button-group">
+            <Link to={`/projects/${id}/templates/library`} className="btn-small btn-secondary">
+              <Library size={16} /> Browse Library
+            </Link>
+            <Link to={`/projects/${id}/templates/new`} className="btn-small btn-primary">
+              <Plus size={16} /> Create Template
+            </Link>
+          </div>
         </div>
         <div className="list">
           {templates.length === 0 ? (
@@ -114,12 +152,26 @@ const ProjectDetails: React.FC = () => {
             templates.map(t => (
               <div key={t.id} className="list-item">
                 <span>{t.name}</span>
-                <button
-                  className="btn-small"
-                  onClick={() => openCreateForm(t)}
-                >
-                  Create Instance
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <button
+                    className="btn-small"
+                    onClick={() => openCreateForm(t)}
+                  >
+                    Create Instance
+                  </button>
+                  {user && (user.role_id === 2 || user.role_id === 4) && (
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleDeleteTemplate(t.id, t.name)}
+                      title="Delete template"
+                      style={{ color: '#991b1b', opacity: 0.5, transition: 'opacity 0.2s' }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -133,14 +185,47 @@ const ProjectDetails: React.FC = () => {
             <div className="list-item">No active ITPs. Create an instance from a template.</div>
           ) : (
             instances.map(i => (
-              <Link to={`/itp/${i.id}`} key={i.id} className="list-item clickable">
-                <span>{i.name}</span>
-                <span className={`status-badge ${i.status.toLowerCase().replace(/\s+/g, '-')}`}>{i.status}</span>
-              </Link>
+              <div key={i.id} className="list-item">
+                <Link to={`/itp/${i.id}`} className="list-item-link">
+                  <span>{i.name}</span>
+                  <span className={`status-badge ${i.status.toLowerCase().replace(/\s+/g, '-')}`}>{i.status}</span>
+                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {i.status !== 'Closed' && user && (user.role_id === 2 || user.role_id === 4) && (
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => { e.preventDefault(); handleDeactivateITP(i.id, i.name); }}
+                      title="Deactivate ITP"
+                      style={{ color: '#92400e', opacity: 0.5, transition: 'opacity 0.2s' }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+                    >
+                      <XCircle size={15} />
+                    </button>
+                  )}
+                  {user && user.role_id === 4 && (
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => { e.preventDefault(); handleDeleteITP(i.id, i.name); }}
+                      title="Permanently delete (POC)"
+                      style={{ color: '#991b1b', opacity: 0.4, transition: 'opacity 0.2s' }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
             ))
           )}
         </div>
       </section>
+
+      {/* Witness Point Settings - visible to Head Contractor (roleId 2) and Admin (roleId 4) */}
+      {user && (user.role_id === 2 || user.role_id === 4) && (
+        <WPConfigSection projectId={parseInt(id!)} />
+      )}
 
       {/* Create Instance Modal */}
       {selectedTemplate && (

@@ -1,0 +1,61 @@
+import { Page, Locator } from '@playwright/test';
+
+export class ITPExecutionPage {
+  readonly page: Page;
+  readonly statusBadge: Locator;
+  readonly pointCards: Locator;
+  readonly submitForReviewButton: Locator;
+  readonly approveITPButton: Locator;
+  readonly rejectITPButton: Locator;
+  readonly rejectReasonTextarea: Locator;
+  readonly confirmRejectButton: Locator;
+  readonly errorBanner: Locator;
+  readonly itpName: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.statusBadge = page.locator('.itp-header .status-badge');
+    this.pointCards = page.locator('.point-card');
+    this.submitForReviewButton = page.locator('.workflow-banner.draft button.btn-workflow');
+    this.approveITPButton = page.locator('button.btn-workflow.approve');
+    this.rejectITPButton = page.locator('button.btn-workflow.reject').first();
+    this.rejectReasonTextarea = page.locator('.reject-form textarea');
+    this.confirmRejectButton = page.locator('.reject-form button.btn-workflow.reject');
+    this.errorBanner = page.locator('.error-banner');
+    this.itpName = page.locator('.itp-header h1');
+  }
+
+  async goto(itpId: number | string) {
+    await this.page.goto(`/itp/${itpId}`);
+  }
+
+  async getStatus(): Promise<string> {
+    return (await this.statusBadge.textContent()) ?? '';
+  }
+
+  async signOffPoint(pointIndex: number) {
+    const card = this.pointCards.nth(pointIndex);
+    await card.locator('button.btn-approve').click();
+  }
+
+  async rejectPoint(pointIndex: number) {
+    const card = this.pointCards.nth(pointIndex);
+    await card.locator('button.btn-reject').click();
+  }
+
+  async submitForReview() {
+    await this.submitForReviewButton.click();
+  }
+
+  async approveITP() {
+    await this.approveITPButton.click();
+  }
+
+  async rejectITP(reason?: string) {
+    await this.rejectITPButton.click();
+    if (reason) {
+      await this.rejectReasonTextarea.fill(reason);
+    }
+    await this.confirmRejectButton.click();
+  }
+}

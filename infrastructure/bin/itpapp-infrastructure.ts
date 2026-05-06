@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
 import * as cdk from 'aws-cdk-lib';
+
+// Load deployment secrets from infrastructure/.env (gitignored, never committed)
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 import { ItpAppStack } from '../lib/itpapp-stack';
 
 const app = new cdk.App();
