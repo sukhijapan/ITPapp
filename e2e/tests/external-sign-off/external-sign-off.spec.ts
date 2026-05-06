@@ -29,8 +29,26 @@ async function getUserId(pool: Pool, email: string): Promise<number> {
 /**
  * Helper to get an ITP point ID from the Open ITP instance suitable for external sign-off.
  * Uses the SP (Surveillance Point) at sequence 4 to avoid HP blocking issues.
+ * Also signs off the preceding HP (sequence 1) to unblock the SP.
  */
 async function getSignOffPointId(pool: Pool): Promise<number> {
+  // First, sign off the HP at sequence 1 so it doesn't block later points
+  const hpResult = await pool.query(
+    `SELECT id FROM itp_points WHERE instance_id = $1 AND type = 'HP' AND sequence = 1`,
+    [TEST_ITP_INSTANCES.open.id]
+  );
+  if (hpResult.rows.length > 0) {
+    const userResult = await pool.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [TEST_USERS.headContractor.email]
+    );
+    const hcUserId = userResult.rows[0]?.id;
+    await pool.query(
+      `UPDATE itp_points SET status = 'Approved'::point_status, signed_off_by = $1, signed_off_at = NOW() WHERE id = $2 AND status = 'Open'`,
+      [hcUserId, hpResult.rows[0].id]
+    );
+  }
+
   const result = await pool.query(
     `SELECT id FROM itp_points WHERE instance_id = $1 AND type = 'SP' LIMIT 1`,
     [TEST_ITP_INSTANCES.open.id]

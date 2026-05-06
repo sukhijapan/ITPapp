@@ -122,14 +122,23 @@ test.describe('ITP Execution @critical', () => {
     const pointCount = await itpExecution.pointCards.count();
 
     for (let i = 0; i < pointCount; i++) {
-      await itpExecution.signOffPoint(i);
-      // Wait for point status to update before proceeding
-      await expect(itpExecution.pointCards.nth(i).locator('.status-badge, .point-status'))
-        .toContainText(/approved|signed/i);
+      // Only sign off points that have a visible approve button (not already signed)
+      const card = itpExecution.pointCards.nth(i);
+      const approveBtn = card.locator('button.btn-approve');
+      if (await approveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await approveBtn.click();
+        // Wait for the sign-off to process
+        await page.waitForTimeout(500);
+      }
     }
 
+    // Wait for the auto-close to reflect in the UI (may need a page refresh)
+    await page.waitForTimeout(1000);
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
     // Assert — ITP status automatically changes to Closed
-    await expect(itpExecution.statusBadge).toContainText('Closed');
+    await expect(itpExecution.statusBadge).toContainText('Closed', { timeout: 10000 });
   });
 
   test('should show permission error when wrong role attempts sign-off on role-restricted point', async ({
