@@ -23,6 +23,8 @@ export class ExternalSignOffPage {
 
   async goto(token: string) {
     await this.page.goto(`/external-sign-off/${token}`);
+    // Wait for the page to render (either shows form or error)
+    await this.page.waitForSelector('h1, [class*="error"]', { timeout: 15000 });
   }
 
   async getPointContext(): Promise<string> {

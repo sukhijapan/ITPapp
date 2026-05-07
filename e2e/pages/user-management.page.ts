@@ -33,7 +33,7 @@ export class UserManagementPage {
     await modal.locator('input[type="email"]').fill(email);
     await modal.locator('input[type="text"]').first().fill(fullName);
     // Wait for RoleSelect to finish loading roles (select becomes enabled)
-    await modal.waitForSelector('select:not([disabled])', { timeout: 15000 });
+    await modal.locator('select:not([disabled])').waitFor({ state: 'visible', timeout: 15000 });
     await modal.locator('select').selectOption({ label: role });
     await modal.locator('button[type="submit"]').click();
   }

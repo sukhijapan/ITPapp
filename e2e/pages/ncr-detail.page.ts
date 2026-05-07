@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 export class NCRDetailPage {
   readonly page: Page;
@@ -31,22 +31,30 @@ export class NCRDetailPage {
 
   async goto(ncrId: number | string) {
     await this.page.goto(`/ncrs/${ncrId}`);
+    // Wait for the NCR detail page to finish loading
+    await this.page.waitForSelector('.ncr-detail-header, .error-banner', { timeout: 15000 });
   }
 
   async updateFields(data: { rootCause?: string; correctiveAction?: string; disposition?: string }) {
     if (data.rootCause !== undefined) {
+      await this.rootCauseTextarea.waitFor({ state: 'visible', timeout: 10000 });
       await this.rootCauseTextarea.fill(data.rootCause);
     }
     if (data.correctiveAction !== undefined) {
+      await this.correctiveActionTextarea.waitFor({ state: 'visible', timeout: 10000 });
       await this.correctiveActionTextarea.fill(data.correctiveAction);
     }
     if (data.disposition !== undefined) {
+      await this.dispositionTextarea.waitFor({ state: 'visible', timeout: 10000 });
       await this.dispositionTextarea.fill(data.disposition);
     }
+    await this.saveButton.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(this.saveButton).toBeEnabled({ timeout: 5000 });
     await this.saveButton.click();
   }
 
   async resolve() {
+    await this.resolveButton.waitFor({ state: 'visible', timeout: 10000 });
     await this.resolveButton.click();
   }
 
