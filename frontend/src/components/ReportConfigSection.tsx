@@ -47,20 +47,24 @@ const ReportConfigSection: React.FC<ReportConfigSectionProps> = ({ projectId }) 
     setError('');
     try {
       const [configRes, logoRes] = await Promise.all([
-        api.get(`/projects/${projectId}/report-config`),
-        api.get(`/projects/${projectId}/logo`).catch(() => ({ data: { hasLogo: false, uploadedAt: null } })),
+        api.get(`/projects/${projectId}/report-config`).catch(() => null),
+        api.get(`/projects/${projectId}/logo`).catch(() => null),
       ]);
-      const d = configRes.data.data || configRes.data;
-      setConfig({
-        companyName: d.companyName || '',
-        docNumberPrefix: d.docNumberPrefix || '',
-        defaultRevision: d.defaultRevision || '',
-        projectSubtitle: d.projectSubtitle || '',
-      });
-      const l = logoRes.data.data || logoRes.data;
-      setLogoMeta({ hasLogo: l.hasLogo ?? false, uploadedAt: l.uploadedAt ?? null });
-    } catch {
-      setError('Failed to load report configuration');
+
+      if (configRes) {
+        const d = configRes.data.data || configRes.data;
+        setConfig({
+          companyName: d.companyName || '',
+          docNumberPrefix: d.docNumberPrefix || '',
+          defaultRevision: d.defaultRevision || '',
+          projectSubtitle: d.projectSubtitle || '',
+        });
+      }
+
+      if (logoRes) {
+        const l = logoRes.data.data || logoRes.data;
+        setLogoMeta({ hasLogo: l.hasLogo ?? false, uploadedAt: l.uploadedAt ?? null });
+      }
     } finally {
       setLoading(false);
     }
