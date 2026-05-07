@@ -57,7 +57,44 @@ const fmtDateTime = (v) => {
 };
 
 /**
- * Calculates logo dimensions to fit within max bounds while maintaining aspect ratio.
+ * Reads pixel dimensions directly from a JPEG or PNG buffer.
+ * Avoids going through jsPDF's getImageProperties which re-encodes the bytes
+ * through a UTF-8 text path and corrupts any byte > 0x7F.
+ */
+function readImageDimensions(buffer) {
+  if (!buffer || buffer.length < 24) return { width: 0, height: 0 };
+
+  // PNG: signature \x89PNG, width at bytes 16-19, height at 20-23 (big-endian)
+  if (buffer[0] === 0x89 && buffer[1] === 0x50) {
+    return {
+      width: buffer.readUInt32BE(16),
+      height: buffer.readUInt32BE(20),
+    };
+  }
+
+  // JPEG: scan for SOF marker (0xFF 0xC0..0xC3) to find width and height
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset < buffer.length - 8) {
+      if (buffer[offset] !== 0xff) break;
+      const marker = buffer[offset + 1];
+      // SOF0–SOF3: Start Of Frame markers
+      if (marker >= 0xc0 && marker <= 0xc3) {
+        return {
+          width: buffer.readUInt16BE(offset + 7),
+          height: buffer.readUInt16BE(offset + 5),
+        };
+      }
+      const segLen = buffer.readUInt16BE(offset + 2);
+      offset += 2 + segLen;
+    }
+  }
+
+  return { width: 0, height: 0 };
+}
+
+/**
+ * Calculates logo display dimensions to fit within max bounds while preserving aspect ratio.
  */
 function calculateLogoDimensions(imgWidth, imgHeight) {
   if (!imgWidth || !imgHeight) return { width: LOGO_MAX_WIDTH, height: LOGO_MAX_HEIGHT };
@@ -87,12 +124,16 @@ function renderHeader(doc, data, config, logoBase64) {
 
   if (logoBase64) {
     try {
+      // Decode base64 ourselves using Buffer (binary-safe) instead of letting
+      // jsPDF decode it via its string/UTF-8 path, which corrupts bytes > 0x7F
+      // (e.g. JPEG \xff\xd8 SOI marker becomes the UTF-8 replacement character).
       const format = logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
-      const imgProps = doc.getImageProperties(logoBase64);
-      console.log(`[PdfBuilder] getImageProperties: width=${imgProps.width} height=${imgProps.height} fileType=${imgProps.fileType}`);
-      const dims = calculateLogoDimensions(imgProps.width, imgProps.height);
-      console.log(`[PdfBuilder] addImage: format=${format} x=${logoX} y=${logoY} w=${dims.width} h=${dims.height}`);
-      doc.addImage(logoBase64, format, logoX, logoY, dims.width, dims.height);
+      const rawBase64 = logoBase64.replace(/^data:[^;]+;base64,/, '');
+      const imageBuffer = Buffer.from(rawBase64, 'base64');
+      const { width: pw, height: ph } = readImageDimensions(imageBuffer);
+      const dims = calculateLogoDimensions(pw, ph);
+      console.log(`[PdfBuilder] addImage: format=${format} bytes=${imageBuffer.length} px=${pw}x${ph} mm=${dims.width.toFixed(1)}x${dims.height.toFixed(1)}`);
+      doc.addImage(imageBuffer, format, logoX, logoY, dims.width, dims.height);
       console.log('[PdfBuilder] addImage succeeded');
     } catch (e) {
       console.error('[PdfBuilder] Logo render failed, falling back to company name:', e.message);
@@ -715,6 +756,7 @@ module.exports = {
   renderNCRSection,
   renderAuditTrail,
   renderFootersAndWatermarks,
+  readImageDimensions,
   calculateLogoDimensions,
   getTypeBadgeColour,
   formatSignOff,

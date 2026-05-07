@@ -370,12 +370,13 @@ describe('Property 9: Audit trail chronological ordering', () => {
     fc.assert(
       fc.property(
         fc.array(
-          fc.date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') }),
+          // Use integer timestamps to avoid fast-check generating new Date(NaN)
+          fc.integer({ min: new Date('2020-01-01').getTime(), max: new Date('2030-01-01').getTime() }),
           { minLength: 2, maxLength: 20 }
         ),
-        (dates) => {
-          const logs = dates.map((d, i) =>
-            makeLog(d.toISOString(), { full_name: `User ${i}`, action: 'action' })
+        (timestamps) => {
+          const logs = timestamps.map((ts, i) =>
+            makeLog(new Date(ts).toISOString(), { full_name: `User ${i}`, action: 'action' })
           );
           // Apply the same sort the builder uses
           const sorted = [...logs].sort(
