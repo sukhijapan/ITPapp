@@ -149,5 +149,8 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// For AWS Lambda
-module.exports.handler = serverless(app);
+// For AWS Lambda — binary types must be declared so serverless-http
+// base64-encodes them rather than applying UTF-8, which corrupts binary bytes.
+module.exports.handler = serverless(app, {
+  binary: ['application/pdf', 'application/octet-stream', 'image/*'],
+});

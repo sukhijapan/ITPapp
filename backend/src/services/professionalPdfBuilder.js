@@ -57,9 +57,8 @@ const fmtDateTime = (v) => {
 };
 
 /**
- * Reads pixel dimensions directly from a JPEG or PNG buffer.
- * Avoids going through jsPDF's getImageProperties which re-encodes the bytes
- * through a UTF-8 text path and corrupts any byte > 0x7F.
+ * Reads pixel dimensions directly from a JPEG or PNG buffer header,
+ * avoiding the need to call jsPDF's getImageProperties.
  */
 function readImageDimensions(buffer) {
   if (!buffer || buffer.length < 24) return { width: 0, height: 0 };
@@ -120,21 +119,14 @@ function renderHeader(doc, data, config, logoBase64) {
   const logoX = MARGIN;
   const logoY = headerTop;
 
-  console.log(`[PdfBuilder] renderHeader: logoBase64=${logoBase64 ? `present (${logoBase64.length} chars, starts: ${logoBase64.slice(0, 30)})` : 'null'} companyName="${config.companyName}"`);
-
   if (logoBase64) {
     try {
-      // Decode base64 ourselves using Buffer (binary-safe) instead of letting
-      // jsPDF decode it via its string/UTF-8 path, which corrupts bytes > 0x7F
-      // (e.g. JPEG \xff\xd8 SOI marker becomes the UTF-8 replacement character).
       const format = logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
       const rawBase64 = logoBase64.replace(/^data:[^;]+;base64,/, '');
       const imageBuffer = Buffer.from(rawBase64, 'base64');
       const { width: pw, height: ph } = readImageDimensions(imageBuffer);
       const dims = calculateLogoDimensions(pw, ph);
-      console.log(`[PdfBuilder] addImage: format=${format} bytes=${imageBuffer.length} px=${pw}x${ph} mm=${dims.width.toFixed(1)}x${dims.height.toFixed(1)}`);
       doc.addImage(imageBuffer, format, logoX, logoY, dims.width, dims.height);
-      console.log('[PdfBuilder] addImage succeeded');
     } catch (e) {
       console.error('[PdfBuilder] Logo render failed, falling back to company name:', e.message);
       renderCompanyNameText(doc, config.companyName, logoX, logoY);

@@ -75,8 +75,6 @@ const generateITPReportBuffer = async (instanceId) => {
     logoBase64 = null;
   }
 
-  console.log(`[ReportService] Building PDF for instance=${instanceId} project=${data.instance.project_id}: logoBase64=${logoBase64 ? `present (${logoBase64.length} chars)` : 'null'} companyName="${config.companyName}"`);
-
   // Generate professional PDF
   return buildProfessionalPdf(data, config, logoBase64);
 };

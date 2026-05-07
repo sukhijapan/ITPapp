@@ -24,8 +24,6 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
   // Client converts to JPEG before upload (Canvas API). Server encodes as-is.
   const base64DataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
 
-  console.log(`[LogoService] Storing logo for project ${projectId}: mimetype=${mimetype} bufferBytes=${fileBuffer.length} base64Chars=${base64DataUri.length}`);
-
   await db.query(
     `UPDATE projects
      SET logo_mime_type = $1, logo_base64 = $2, logo_uploaded_at = NOW()
@@ -33,7 +31,6 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
     [mimetype, base64DataUri, projectId]
   );
 
-  console.log(`[LogoService] Logo stored successfully for project ${projectId}`);
   return { base64DataUri };
 }
 
@@ -42,13 +39,8 @@ async function getLogoBase64(projectId) {
     'SELECT logo_base64 FROM projects WHERE id = $1',
     [projectId]
   );
-  if (result.rows.length === 0) {
-    console.log(`[LogoService] getLogoBase64: no project row found for id=${projectId}`);
-    return null;
-  }
-  const val = result.rows[0].logo_base64;
-  console.log(`[LogoService] getLogoBase64 project=${projectId}: ${val ? `found (${val.length} chars)` : 'null/empty'}`);
-  return val || null;
+  if (result.rows.length === 0) return null;
+  return result.rows[0].logo_base64 || null;
 }
 
 async function getLogoMeta(projectId) {
