@@ -76,10 +76,7 @@ exports.registerInvite = async (req, res) => {
     const user = userResult.rows[0];
 
     // 5. Mark invitation token as used
-    await db.query(
-      "UPDATE invitations SET status = 'used' WHERE token = $1",
-      [token]
-    );
+    await invitationService.markTokenUsed(token);
 
     // 6. Generate JWT and return
     const jwtToken = jwt.sign(
