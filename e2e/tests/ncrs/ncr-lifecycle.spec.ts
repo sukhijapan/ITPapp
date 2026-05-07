@@ -53,7 +53,8 @@ test.describe('NCR Lifecycle @regression', () => {
   test('should show all fields, audit trail, and linked ITP point info on detail page', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — ensure NCR is Open (other tests may have resolved it)
+    await resetNCRToStatus(TEST_NCRS.open.id, 'Open');
     const page = await headContractorContext.newPage();
     const ncrDetail = new NCRDetailPage(page);
 
@@ -80,7 +81,8 @@ test.describe('NCR Lifecycle @regression', () => {
   test('should persist changes when updating NCR fields', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — ensure NCR is Open (other tests may have resolved it)
+    await resetNCRToStatus(TEST_NCRS.open.id, 'Open');
     const page = await headContractorContext.newPage();
     const ncrDetail = new NCRDetailPage(page);
     const testData = {
@@ -103,7 +105,8 @@ test.describe('NCR Lifecycle @regression', () => {
   test('should change NCR status to Closed when resolved', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — ensure NCR is Open before resolving
+    await resetNCRToStatus(TEST_NCRS.open.id, 'Open');
     const page = await headContractorContext.newPage();
     const ncrDetail = new NCRDetailPage(page);
 

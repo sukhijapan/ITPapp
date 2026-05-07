@@ -32,7 +32,19 @@ const WitnessPointResponse = () => {
     const validateToken = async () => {
       try {
         const response = await api.get(`/wp-notifications/token/${token}/validate`);
-        setData(response.data);
+        const raw = response.data?.data || response.data;
+        // Map camelCase backend response to snake_case interface
+        setData({
+          notification_id: raw.notificationId ?? raw.notification_id,
+          project_name: raw.projectName ?? raw.project_name ?? '',
+          itp_name: raw.itpName ?? raw.itp_name ?? '',
+          point_description: raw.pointDescription ?? raw.point_description ?? '',
+          planned_inspection_time: raw.plannedInspectionTime ?? raw.planned_inspection_time ?? '',
+          location_description: raw.location ?? raw.location_description ?? '',
+          scope_of_work: raw.scope ?? raw.scope_of_work ?? '',
+          recipient_name: raw.recipientName ?? raw.recipient_name ?? '',
+          expires_at: raw.expiresAt ?? raw.expires_at ?? '',
+        });
       } catch (err: any) {
         setError(err.response?.data?.error || 'Invalid or expired response link');
       } finally {

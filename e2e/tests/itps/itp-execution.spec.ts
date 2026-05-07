@@ -103,10 +103,16 @@ test.describe('ITP Execution @critical', () => {
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
-    // Act — navigate to the Open ITP and attempt to sign off point 2 (RP, role 2 = HC)
-    // Point 2 is HC-accessible but blocked by the preceding unsigned HP at index 0
+    // Act — navigate to the Open ITP and attempt to sign off a point blocked by the HP
+    // Points are grouped by section in the UI. DOM order:
+    //   nth(0) = seq 1 (HP, role 2 = HC)
+    //   nth(1) = seq 2 (WP, role 3 = Client)
+    //   nth(2) = seq 4 (SP, role 1 = Subcontractor)
+    //   nth(3) = seq 3 (RP, role 2 = HC) — blocked by preceding unsigned HP at seq 1
+    //   nth(4) = seq 5 (IP, no role restriction)
+    // We target nth(3): HC-accessible RP blocked by the unsigned HP at seq 1
     await itpExecution.goto(TEST_ITP_INSTANCES.open.id);
-    await itpExecution.signOffPoint(2); // RP at sequence 3, blocked by HP at sequence 1
+    await itpExecution.signOffPoint(3);
 
     // Assert — blocking error is displayed
     await expect(itpExecution.errorBanner).toBeVisible();

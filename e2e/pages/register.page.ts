@@ -21,6 +21,8 @@ export class RegisterPage {
 
   async goto(token: string) {
     await this.page.goto(`/register/${token}`);
+    // Wait for the page to render (either shows form or error)
+    await this.page.waitForSelector('input[type="password"], h1', { timeout: 15000 });
   }
 
   async register(password: string) {

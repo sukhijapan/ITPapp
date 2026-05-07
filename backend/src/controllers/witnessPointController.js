@@ -338,7 +338,8 @@ exports.validateToken = async (req, res) => {
         location: data.location_description,
         scope: data.scope_of_work,
         recipientName: data.recipient_name,
-        recipientEmail: data.recipient_email
+        recipientEmail: data.recipient_email,
+        expiresAt: data.expires_at
       }
     });
   } catch (err) {
