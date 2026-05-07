@@ -1,4 +1,4 @@
-const logoService = require('../services/logoService');
+const { uploadLogo, getLogoMeta, deleteLogo } = require('../services/logoService');
 
 /**
  * POST /projects/:id/logo
@@ -13,7 +13,7 @@ exports.uploadLogo = async (req, res) => {
   }
 
   try {
-    const { s3Key } = await logoService.uploadLogo(
+    const { s3Key } = await uploadLogo(
       projectId,
       req.file.buffer,
       req.file.mimetype,
@@ -25,29 +25,24 @@ exports.uploadLogo = async (req, res) => {
     if (err.statusCode === 400) {
       return res.status(400).json({ error: err.message });
     }
-    console.error('[LogoController] Upload error:', err);
-    res.status(500).json({ error: 'Failed to upload logo.' });
+    console.error('[LogoController] Upload error:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to upload logo.', detail: err.message });
   }
 };
 
 /**
  * GET /projects/:id/logo
- * Retrieve the logo base64 data URI for a project.
+ * Returns { hasLogo, logoBase64, uploadedAt } for a project.
  */
 exports.getLogo = async (req, res) => {
   const projectId = req.params.id;
 
   try {
-    const logoBase64 = await logoService.getLogoBase64(projectId);
-
-    if (!logoBase64) {
-      return res.status(404).json({ error: 'No logo found for this project.' });
-    }
-
-    res.status(200).json({ logoBase64 });
+    const meta = await getLogoMeta(projectId);
+    res.status(200).json(meta);
   } catch (err) {
-    console.error('[LogoController] Get logo error:', err);
-    res.status(500).json({ error: 'Failed to retrieve logo.' });
+    console.error('[LogoController] Get logo error:', err.message);
+    res.status(200).json({ hasLogo: false, uploadedAt: null });
   }
 };
 
@@ -59,10 +54,10 @@ exports.deleteLogo = async (req, res) => {
   const projectId = req.params.id;
 
   try {
-    await logoService.deleteLogo(projectId);
+    await deleteLogo(projectId);
     res.status(204).send();
   } catch (err) {
-    console.error('[LogoController] Delete logo error:', err);
+    console.error('[LogoController] Delete logo error:', err.message);
     res.status(500).json({ error: 'Failed to delete logo.' });
   }
 };

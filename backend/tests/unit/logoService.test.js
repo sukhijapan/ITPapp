@@ -1,3 +1,6 @@
+// Set before module load so the module-level `const S3_BUCKET = process.env.S3_BUCKET` picks it up.
+process.env.S3_BUCKET = 'test-bucket';
+
 // babel-jest hoists variables prefixed with 'mock' above jest.mock calls,
 // making them available inside the factory closure.
 const mockSend = jest.fn();

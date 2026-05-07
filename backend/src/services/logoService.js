@@ -54,46 +54,54 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
     throw error;
   }
 
-  // Check if project already has a logo — delete old S3 object if so
-  const existing = await db.query(
-    'SELECT logo_s3_key FROM projects WHERE id = $1',
-    [projectId]
-  );
-  if (existing.rows.length > 0 && existing.rows[0].logo_s3_key) {
-    try {
+  // Check if project already has a logo — best-effort delete old S3 object
+  try {
+    const existing = await db.query(
+      'SELECT logo_s3_key FROM projects WHERE id = $1',
+      [projectId]
+    );
+    if (existing.rows.length > 0 && existing.rows[0].logo_s3_key) {
       await s3.send(new DeleteObjectCommand({
         Bucket: S3_BUCKET,
         Key: existing.rows[0].logo_s3_key,
+      })).catch((err) => {
+        console.warn(`[LogoService] Failed to delete old logo from S3: ${err.message}`);
+      });
+    }
+  } catch (err) {
+    console.warn(`[LogoService] Could not check for existing logo: ${err.message}`);
+  }
+
+  // Generate base64 data URI for PDF embedding (always succeeds — no external deps)
+  const base64DataUri = await resizeAndEncode(fileBuffer, mimetype);
+
+  // Best-effort S3 upload — PDF generation uses the base64 in DB, not S3
+  const ext = mimetype === 'image/png' ? 'png' : 'jpg';
+  const s3Key = `logos/${projectId}/logo.${ext}`;
+  let storedS3Key = null;
+  if (S3_BUCKET) {
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        Body: fileBuffer,
+        ContentType: mimetype,
       }));
+      storedS3Key = s3Key;
     } catch (err) {
-      console.warn(`[LogoService] Failed to delete old logo from S3: ${err.message}`);
+      console.warn(`[LogoService] S3 upload failed (logo saved to DB only): ${err.message}`);
     }
   }
 
-  // Determine file extension from mimetype
-  const ext = mimetype === 'image/png' ? 'png' : 'jpg';
-  const s3Key = `logos/${projectId}/logo.${ext}`;
-
-  // Upload to S3
-  await s3.send(new PutObjectCommand({
-    Bucket: S3_BUCKET,
-    Key: s3Key,
-    Body: fileBuffer,
-    ContentType: mimetype,
-  }));
-
-  // Generate base64 data URI for PDF embedding
-  const base64DataUri = await resizeAndEncode(fileBuffer, mimetype);
-
-  // Store S3 key, mime type, base64, and timestamp in DB
+  // Store base64 and timestamp in DB — this is the authoritative copy for PDF generation
   await db.query(
-    `UPDATE projects 
+    `UPDATE projects
      SET logo_s3_key = $1, logo_mime_type = $2, logo_base64 = $3, logo_uploaded_at = NOW()
      WHERE id = $4`,
-    [s3Key, mimetype, base64DataUri, projectId]
+    [storedS3Key, mimetype, base64DataUri, projectId]
   );
 
-  return { s3Key, base64DataUri };
+  return { s3Key: storedS3Key, base64DataUri };
 }
 
 /**
@@ -106,10 +114,26 @@ async function getLogoBase64(projectId) {
     'SELECT logo_base64 FROM projects WHERE id = $1',
     [projectId]
   );
-  if (result.rows.length === 0) {
-    return null;
-  }
+  if (result.rows.length === 0) return null;
   return result.rows[0].logo_base64 || null;
+}
+
+/**
+ * Retrieves logo metadata (hasLogo flag + uploadedAt timestamp) for a project.
+ * @param {number} projectId
+ * @returns {Promise<{hasLogo: boolean, uploadedAt: string|null}>}
+ */
+async function getLogoMeta(projectId) {
+  const result = await db.query(
+    'SELECT logo_base64, logo_uploaded_at FROM projects WHERE id = $1',
+    [projectId]
+  );
+  if (result.rows.length === 0) return { hasLogo: false, uploadedAt: null };
+  const row = result.rows[0];
+  return {
+    hasLogo: !!row.logo_base64,
+    uploadedAt: row.logo_uploaded_at || null,
+  };
 }
 
 /**
@@ -149,5 +173,6 @@ module.exports = {
   resizeAndEncode,
   uploadLogo,
   getLogoBase64,
+  getLogoMeta,
   deleteLogo,
 };
