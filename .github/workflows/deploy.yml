@@ -33,6 +33,10 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Install backend dependencies
+        run: npm ci --omit=dev
+        working-directory: backend
+
       - name: Install infrastructure dependencies
         run: npm ci
         working-directory: infrastructure
