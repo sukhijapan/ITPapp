@@ -146,9 +146,8 @@ exports.executeExternalSignOff = async (token, status, comments) => {
     // Audit log (user_id is NULL for external sign-off)
     await client.query(
       `INSERT INTO audit_logs (itp_instance_id, itp_point_id, action, old_status, new_status, metadata)
-       SELECT instance_id, id, 'EXTERNAL_SIGN_OFF', status, $1, $2
-       FROM itp_points WHERE id = $3`,
-      [status, JSON.stringify({ email: tokenData.email, role: tokenData.role_name, comments }), pointId]
+       VALUES ($1, $2, 'EXTERNAL_SIGN_OFF', $3, $4, $5)`,
+      [point.instance_id, pointId, point.status, status, JSON.stringify({ email: tokenData.email, role: tokenData.role_name, comments })]
     );
 
     // Auto-close ITP when all points signed off

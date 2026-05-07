@@ -33,7 +33,7 @@ const fetchReportData = async (instanceId) => {
   const auditRes = await db.query(`
     SELECT a.*, u.full_name
     FROM audit_logs a
-    JOIN users u ON a.user_id = u.id
+    LEFT JOIN users u ON a.user_id = u.id
     WHERE a.itp_instance_id = $1 ORDER BY a.timestamp`, [instanceId]);
 
   return {
