@@ -165,6 +165,15 @@ async function runMigration() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`,
     `ALTER TABLE itp_points ADD COLUMN IF NOT EXISTS wp_waiver_status JSONB;`,
+    // Professional PDF reports (007_professional_reports)
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS company_name VARCHAR(255);`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS doc_number_prefix VARCHAR(50);`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS default_revision VARCHAR(20) DEFAULT 'Rev 0';`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_subtitle VARCHAR(500);`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS logo_s3_key TEXT;`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS logo_mime_type VARCHAR(50);`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS logo_base64 TEXT;`,
+    `ALTER TABLE projects ADD COLUMN IF NOT EXISTS logo_uploaded_at TIMESTAMP WITH TIME ZONE;`,
   ];
 
   try {

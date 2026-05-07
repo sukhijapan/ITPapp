@@ -57,7 +57,43 @@ const fmtDateTime = (v) => {
 };
 
 /**
- * Calculates logo dimensions to fit within max bounds while maintaining aspect ratio.
+ * Reads pixel dimensions directly from a JPEG or PNG buffer header,
+ * avoiding the need to call jsPDF's getImageProperties.
+ */
+function readImageDimensions(buffer) {
+  if (!buffer || buffer.length < 24) return { width: 0, height: 0 };
+
+  // PNG: signature \x89PNG, width at bytes 16-19, height at 20-23 (big-endian)
+  if (buffer[0] === 0x89 && buffer[1] === 0x50) {
+    return {
+      width: buffer.readUInt32BE(16),
+      height: buffer.readUInt32BE(20),
+    };
+  }
+
+  // JPEG: scan for SOF marker (0xFF 0xC0..0xC3) to find width and height
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset < buffer.length - 8) {
+      if (buffer[offset] !== 0xff) break;
+      const marker = buffer[offset + 1];
+      // SOF0–SOF3: Start Of Frame markers
+      if (marker >= 0xc0 && marker <= 0xc3) {
+        return {
+          width: buffer.readUInt16BE(offset + 7),
+          height: buffer.readUInt16BE(offset + 5),
+        };
+      }
+      const segLen = buffer.readUInt16BE(offset + 2);
+      offset += 2 + segLen;
+    }
+  }
+
+  return { width: 0, height: 0 };
+}
+
+/**
+ * Calculates logo display dimensions to fit within max bounds while preserving aspect ratio.
  */
 function calculateLogoDimensions(imgWidth, imgHeight) {
   if (!imgWidth || !imgHeight) return { width: LOGO_MAX_WIDTH, height: LOGO_MAX_HEIGHT };
@@ -86,10 +122,13 @@ function renderHeader(doc, data, config, logoBase64) {
   if (logoBase64) {
     try {
       const format = logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
-      const dims = calculateLogoDimensions(LOGO_MAX_WIDTH * 5, LOGO_MAX_HEIGHT * 5);
-      doc.addImage(logoBase64, format, logoX, logoY, dims.width, dims.height);
+      const rawBase64 = logoBase64.replace(/^data:[^;]+;base64,/, '');
+      const imageBuffer = Buffer.from(rawBase64, 'base64');
+      const { width: pw, height: ph } = readImageDimensions(imageBuffer);
+      const dims = calculateLogoDimensions(pw, ph);
+      doc.addImage(imageBuffer, format, logoX, logoY, dims.width, dims.height);
     } catch (e) {
-      console.warn('[ProfessionalPdfBuilder] Failed to render logo, falling back to company name text:', e.message);
+      console.error('[PdfBuilder] Logo render failed, falling back to company name:', e.message);
       renderCompanyNameText(doc, config.companyName, logoX, logoY);
     }
   } else {
@@ -99,16 +138,19 @@ function renderHeader(doc, data, config, logoBase64) {
   // ── Centre column: Document title ──
   const centreX = PAGE_WIDTH / 2;
   const titleY = headerTop + 8;
+  // Right metadata column starts at PAGE_WIDTH-MARGIN-45; leave a 5mm gap
+  const titleMaxWidth = (PAGE_WIDTH - MARGIN - 45 - 5 - centreX) * 2;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(...HEADER_TEXT);
-  doc.text(safe(data.instance.name), centreX, titleY, { align: 'center' });
+  const titleLines = doc.splitTextToSize(safe(data.instance.name), titleMaxWidth);
+  doc.text(titleLines, centreX, titleY, { align: 'center' });
 
   if (config.projectSubtitle) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(config.projectSubtitle, centreX, titleY + 5, { align: 'center' });
+    doc.text(config.projectSubtitle, centreX, titleY + titleLines.length * 5, { align: 'center' });
   }
 
   // ── Right column: Metadata table ──
@@ -184,27 +226,38 @@ function renderMetadataTable(doc, data, config, startY) {
   const rightLabelX = MARGIN + CONTENT_WIDTH / 2;
   const rightValueX = MARGIN + CONTENT_WIDTH / 2 + 30;
 
+  // Max width for each value column before it would overflow into the other column
+  const leftValueMaxWidth = rightLabelX - leftValueX - 5;
+  const rightValueMaxWidth = PAGE_WIDTH - MARGIN - rightValueX - 2;
+
   const maxRows = Math.max(leftCol.length, rightCol.length);
+  let rowY = y;
 
   for (let i = 0; i < maxRows; i++) {
-    const rowY = y + i * lineHeight;
+    let leftLines = [];
+    let rightLines = [];
 
     if (leftCol[i]) {
       doc.setFont('helvetica', 'bold');
       doc.text(leftCol[i][0], leftLabelX, rowY);
       doc.setFont('helvetica', 'normal');
-      doc.text(leftCol[i][1], leftValueX, rowY);
+      leftLines = doc.splitTextToSize(leftCol[i][1], leftValueMaxWidth);
+      doc.text(leftLines, leftValueX, rowY);
     }
 
     if (rightCol[i]) {
       doc.setFont('helvetica', 'bold');
       doc.text(rightCol[i][0], rightLabelX, rowY);
       doc.setFont('helvetica', 'normal');
-      doc.text(rightCol[i][1], rightValueX, rowY);
+      rightLines = doc.splitTextToSize(rightCol[i][1], rightValueMaxWidth);
+      doc.text(rightLines, rightValueX, rowY);
     }
+
+    // Advance by however many lines the taller side needed
+    rowY += Math.max(leftLines.length || 1, rightLines.length || 1) * lineHeight;
   }
 
-  y += maxRows * lineHeight + 4;
+  y = rowY + 4;
 
   // Draw a line below metadata
   doc.setDrawColor(200, 200, 200);
@@ -709,6 +762,7 @@ module.exports = {
   renderNCRSection,
   renderAuditTrail,
   renderFootersAndWatermarks,
+  readImageDimensions,
   calculateLogoDimensions,
   getTypeBadgeColour,
   formatSignOff,

@@ -23,6 +23,10 @@ const logoRoutes = require('./routes/logos');
 const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 
+// Lambda / API Gateway sits behind a load balancer that sets X-Forwarded-For.
+// Without trust proxy, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
+
 // In production, CORS is handled by Lambda Function URL — adding it here too
 // would create duplicate Access-Control-Allow-Origin headers that browsers reject.
 if (!isProduction) {
@@ -145,5 +149,8 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// For AWS Lambda
-module.exports.handler = serverless(app);
+// For AWS Lambda — binary types must be declared so serverless-http
+// base64-encodes them rather than applying UTF-8, which corrupts binary bytes.
+module.exports.handler = serverless(app, {
+  binary: ['application/pdf', 'application/octet-stream', 'image/*'],
+});

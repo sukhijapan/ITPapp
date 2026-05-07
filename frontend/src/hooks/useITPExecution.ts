@@ -232,7 +232,7 @@ export function useITPExecution(id: string | undefined) {
     if (!itp) return;
     setExportingPdf(true);
     try {
-      const response = await api.get(`/itps/instances/${id}/report`, { responseType: 'blob' });
+      const response = await api.get(`/itps/instances/${id}/report?t=${Date.now()}`, { responseType: 'blob' });
       const contentType = String(response.headers['content-type'] || '');
       if (contentType.includes('application/json')) {
         const text = await (response.data as Blob).text();

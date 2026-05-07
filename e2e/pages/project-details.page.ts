@@ -26,6 +26,15 @@ export class ProjectDetailsPage {
   async clickCreateITP(templateName: string) {
     const templateRow = this.templateSection.locator('.list-item', { hasText: templateName });
     await templateRow.locator('button', { hasText: 'Create Instance' }).click();
+    // Modal opens — fill instance name and submit
+    const modal = this.page.locator('.modal-box');
+    await modal.waitFor({ state: 'visible', timeout: 10000 });
+    const nameInput = modal.locator('input[type="text"]').first();
+    await nameInput.fill(`E2E Instance ${Date.now()}`);
+    await modal.locator('button[type="submit"]').click();
+    // Wait for navigation to the ITP execution page and for content to render
+    await this.page.waitForURL('**/itp/**', { timeout: 15000 });
+    await this.page.waitForSelector('.itp-header, .error-banner', { timeout: 15000 });
   }
 
   async getITPInstances(): Promise<string[]> {

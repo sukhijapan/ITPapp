@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 
 interface Recipient {
@@ -20,6 +20,10 @@ const WPConfigSection: React.FC<WPConfigSectionProps> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
   const [success, setSuccess] = useState('');
 
   // Add recipient state
@@ -169,7 +173,7 @@ const WPConfigSection: React.FC<WPConfigSectionProps> = ({ projectId }) => {
     <section className="section">
       <h2>Witness Point Settings</h2>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div ref={errorBannerRef} className="error-banner">{error}</div>}
       {success && (
         <div
           style={{

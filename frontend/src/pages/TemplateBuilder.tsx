@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { Plus, Trash2, Save, MoveUp, MoveDown } from 'lucide-react';
@@ -48,6 +48,10 @@ const TemplateBuilder: React.FC = () => {
   const [description, setDescription] = useState('');
   const [points, setPoints] = useState<Point[]>([emptyPoint(1)]);
   const [error, setError] = useState('');
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
   const [saving, setSaving] = useState(false);
 
   const addPoint = () => setPoints(prev => [...prev, emptyPoint(prev.length + 1)]);
@@ -97,7 +101,7 @@ const TemplateBuilder: React.FC = () => {
         </button>
       </header>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div ref={errorBannerRef} className="error-banner">{error}</div>}
 
       <section className="template-meta">
         <div className="form-group">

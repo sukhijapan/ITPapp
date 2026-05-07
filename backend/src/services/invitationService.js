@@ -141,6 +141,14 @@ async function invalidateToken(rawToken) {
   );
 }
 
+async function markTokenUsed(rawToken) {
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  await pool.query(
+    `UPDATE invitations SET status = 'used' WHERE token = $1`,
+    [tokenHash]
+  );
+}
+
 /**
  * Get all pending invitations.
  *
@@ -191,6 +199,7 @@ module.exports = {
   createInvitation,
   validateToken,
   invalidateToken,
+  markTokenUsed,
   getPendingInvitations,
   resendInvitation,
 };

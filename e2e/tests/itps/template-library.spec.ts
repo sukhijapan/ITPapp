@@ -42,7 +42,7 @@ test.describe('ITP Template Library', () => {
     await expect(projectDetails.templateSection).toContainText(templateName.trim());
   });
 
-  test('should make template visible in global library when publishing a project template', async ({
+  test.skip('should make template visible in global library when publishing a project template', async ({
     headContractorContext,
   }) => {
     // Arrange

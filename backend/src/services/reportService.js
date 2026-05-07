@@ -71,7 +71,7 @@ const generateITPReportBuffer = async (instanceId) => {
   try {
     logoBase64 = await logoService.getLogoBase64(data.instance.project_id);
   } catch (err) {
-    console.warn('[ReportService] Failed to fetch logo, proceeding without:', err.message);
+    console.error('[ReportService] Failed to fetch logo, proceeding without:', err.message);
     logoBase64 = null;
   }
 
