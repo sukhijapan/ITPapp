@@ -21,6 +21,11 @@ export class ForgotPasswordPage {
 
   async submitEmail(email: string) {
     await this.emailInput.fill(email);
+    const responsePromise = this.page.waitForResponse(
+      (r) => r.url().includes('/auth/forgot-password') && r.request().method() === 'POST',
+      { timeout: 15000 }
+    );
     await this.submitButton.click();
+    await responsePromise.catch(() => {});
   }
 }

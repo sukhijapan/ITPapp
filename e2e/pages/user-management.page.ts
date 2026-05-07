@@ -32,9 +32,9 @@ export class UserManagementPage {
     const modal = this.page.locator('.modal-overlay');
     await modal.locator('input[type="email"]').fill(email);
     await modal.locator('input[type="text"]').first().fill(fullName);
-    // Wait for RoleSelect to finish loading roles — the component replaces
-    // a disabled select with an enabled one containing role options
-    await modal.locator('select option:not(:only-child)').first().waitFor({ state: 'attached', timeout: 15000 });
+    // Wait for RoleSelect to finish loading roles — the loading state renders a
+    // disabled select; once roles arrive it is replaced with an enabled select
+    await modal.locator('select:not([disabled])').first().waitFor({ state: 'attached', timeout: 15000 });
     await modal.locator('select').selectOption({ label: role });
     await modal.locator('button[type="submit"]').click();
   }

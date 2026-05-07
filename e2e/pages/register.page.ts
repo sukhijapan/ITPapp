@@ -21,20 +21,13 @@ export class RegisterPage {
 
   async goto(token: string) {
     await this.page.goto(`/register/${token}`);
-    
-    // Wait for either the form, an error, or the loading state
-    const heading = this.page.getByRole('heading', { name: /Complete Registration|Invalid Link|Invitation Expired/ });
-    const loading = this.page.getByText('Loading…'); // Note: uses ellipsis character …
 
-    await Promise.race([
-      heading.waitFor({ state: 'visible', timeout: 15000 }),
-      loading.waitFor({ state: 'visible', timeout: 15000 })
-    ]).catch(() => {});
-
-    // If still showing "Loading…", wait for it to resolve
-    if (await loading.isVisible()) {
-      await loading.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
-    }
+    // Wait for the page to leave the loading state ("Setting up your account...")
+    // and resolve to a final heading (valid form, expired, or invalid)
+    const finalHeading = this.page.getByRole('heading', {
+      name: /Complete Registration|Invalid Link|Invitation Expired/,
+    });
+    await finalHeading.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
   }
 
   async register(password: string) {

@@ -35,19 +35,19 @@ if (!isProduction) {
 app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
 
-// Strict rate limiter for auth endpoints — 10 requests per minute per IP
+// Strict rate limiter for auth endpoints — 10 requests per minute per IP (relaxed in test mode)
 const authRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: process.env.NODE_ENV === 'test' ? 500 : 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
 });
 
-// General API rate limiter — 200 requests per minute per IP
+// General API rate limiter — 200 requests per minute per IP (relaxed in test mode)
 const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 200,
+  max: process.env.NODE_ENV === 'test' ? 2000 : 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },

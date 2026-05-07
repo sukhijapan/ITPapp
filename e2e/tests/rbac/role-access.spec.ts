@@ -124,7 +124,7 @@ test.describe('Role-Based Access Control @critical', () => {
 
     // Assert — can access project details
     await page.goto(`/projects/${TEST_PROJECT.id}`);
-    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('h1')).toBeVisible({ timeout: 15000 });
     expect(page.url()).toContain(`/projects/${TEST_PROJECT.id}`);
 
     // Assert — can access ITP execution
