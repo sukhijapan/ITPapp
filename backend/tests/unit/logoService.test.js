@@ -5,16 +5,6 @@ process.env.S3_BUCKET = 'test-bucket';
 // making them available inside the factory closure.
 const mockSend = jest.fn();
 
-jest.mock('sharp', () => {
-  const instance = {
-    resize: jest.fn().mockReturnThis(),
-    flatten: jest.fn().mockReturnThis(),
-    jpeg: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn().mockResolvedValue(Buffer.from('fake-jpeg-output')),
-  };
-  return jest.fn().mockReturnValue(instance);
-});
-
 jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({ send: mockSend })),
   PutObjectCommand: jest.fn((params) => ({ command: 'put', ...params })),
@@ -24,7 +14,7 @@ jest.mock('@aws-sdk/client-s3', () => ({
 jest.mock('../../src/db', () => ({ query: jest.fn() }));
 
 const db = require('../../src/db');
-const { validateLogoFile, resizeAndEncode, uploadLogo, getLogoBase64, deleteLogo } = require('../../src/services/logoService');
+const { validateLogoFile, uploadLogo, getLogoBase64, deleteLogo } = require('../../src/services/logoService');
 
 const PNG_MIME = 'image/png';
 const JPEG_MIME = 'image/jpeg';
@@ -88,32 +78,6 @@ describe('validateLogoFile', () => {
   });
 });
 
-// ── resizeAndEncode ───────────────────────────────────────────────────────────
-
-describe('resizeAndEncode', () => {
-  it('always returns a JPEG data URI regardless of input format', async () => {
-    // Minimal 1×1 white PNG (valid PNG bytes)
-    const png1x1 = Buffer.from(
-      '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
-      '2e0000000c4944415478016360f8ff003d00012000c1c4cbac0000000049454e44ae426082',
-      'hex'
-    );
-    const result = await resizeAndEncode(png1x1);
-    expect(result).toMatch(/^data:image\/jpeg;base64,/);
-  });
-
-  it('returns a non-empty data URI for a valid image', async () => {
-    const png1x1 = Buffer.from(
-      '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
-      '2e0000000c4944415478016360f8ff003d00012000c1c4cbac0000000049454e44ae426082',
-      'hex'
-    );
-    const result = await resizeAndEncode(png1x1);
-    const encoded = result.split(',')[1];
-    expect(encoded.length).toBeGreaterThan(0);
-  });
-});
-
 // ── uploadLogo ────────────────────────────────────────────────────────────────
 
 describe('uploadLogo', () => {
@@ -142,7 +106,7 @@ describe('uploadLogo', () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(db.query).toHaveBeenCalledTimes(2);
     expect(result.s3Key).toBe(`logos/${projectId}/logo.png`);
-    expect(result.base64DataUri).toMatch(/^data:image\/jpeg;base64,/);
+    expect(result.base64DataUri).toMatch(/^data:image\/png;base64,/);
   });
 
   it('uses .jpg extension for JPEG uploads', async () => {

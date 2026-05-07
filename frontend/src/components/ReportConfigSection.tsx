@@ -17,6 +17,36 @@ interface ReportConfigSectionProps {
   projectId: number;
 }
 
+function convertToJpegBlob(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_WIDTH = 400;
+      let { width, height } = img;
+      if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('Canvas conversion failed'))),
+        'image/jpeg',
+        0.9,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.src = url;
+  });
+}
+
 const ReportConfigSection: React.FC<ReportConfigSectionProps> = ({ projectId }) => {
   const [config, setConfig] = useState<ReportConfig>({
     companyName: '',
@@ -101,8 +131,9 @@ const ReportConfigSection: React.FC<ReportConfigSectionProps> = ({ projectId }) 
     setUploading(true);
     setError('');
     try {
+      const jpegBlob = await convertToJpegBlob(file);
       const formData = new FormData();
-      formData.append('logo', file);
+      formData.append('logo', jpegBlob, 'logo.jpg');
       await api.post(`/projects/${projectId}/logo`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

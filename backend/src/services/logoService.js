@@ -1,5 +1,4 @@
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const sharp = require('sharp');
 const db = require('../db');
 
 const s3 = new S3Client({});
@@ -25,22 +24,15 @@ function validateLogoFile(mimetype, fileSize) {
 }
 
 /**
- * Resizes an image to max 400px wide and returns a JPEG base64 data URI.
- * Always outputs JPEG regardless of input format because jsPDF's PNG decoder
- * in Node.js (a JS port) produces corrupted pixel output for any PNG file.
- * jsPDF's JPEG decoder works correctly in Node.js. Transparent pixels are
- * composited on white so they render cleanly on the PDF's white background.
- * @param {Buffer} imageBuffer
- * @returns {Promise<string>} base64 data URI (always image/jpeg)
+ * Encodes a file buffer as a base64 data URI.
+ * Resize and JPEG conversion are done client-side before upload (Canvas API),
+ * so the server receives a pre-processed JPEG blob and only needs to encode it.
+ * @param {Buffer} fileBuffer
+ * @param {string} mimetype
+ * @returns {string} base64 data URI
  */
-async function resizeAndEncode(imageBuffer) {
-  const jpegBuffer = await sharp(imageBuffer)
-    .resize({ width: 400, withoutEnlargement: true })
-    .flatten({ background: { r: 255, g: 255, b: 255 } }) // white bg for transparency
-    .jpeg({ quality: 90 })
-    .toBuffer();
-
-  return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+function encodeBase64(fileBuffer, mimetype) {
+  return `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
 }
 
 /**
@@ -79,8 +71,8 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
     console.warn(`[LogoService] Could not check for existing logo: ${err.message}`);
   }
 
-  // Generate base64 data URI for PDF embedding: resize + flatten transparency → JPEG
-  const base64DataUri = await resizeAndEncode(fileBuffer);
+  // Client already converted to JPEG before upload — just encode for DB storage
+  const base64DataUri = encodeBase64(fileBuffer, mimetype);
 
   // Best-effort S3 upload — PDF generation uses the base64 in DB, not S3
   const ext = mimetype === 'image/png' ? 'png' : 'jpg';
@@ -177,7 +169,6 @@ async function deleteLogo(projectId) {
 
 module.exports = {
   validateLogoFile,
-  resizeAndEncode,
   uploadLogo,
   getLogoBase64,
   getLogoMeta,
