@@ -71,9 +71,11 @@ const generateITPReportBuffer = async (instanceId) => {
   try {
     logoBase64 = await logoService.getLogoBase64(data.instance.project_id);
   } catch (err) {
-    console.warn('[ReportService] Failed to fetch logo, proceeding without:', err.message);
+    console.error('[ReportService] Failed to fetch logo, proceeding without:', err.message);
     logoBase64 = null;
   }
+
+  console.log(`[ReportService] Building PDF for instance=${instanceId} project=${data.instance.project_id}: logoBase64=${logoBase64 ? `present (${logoBase64.length} chars)` : 'null'} companyName="${config.companyName}"`);
 
   // Generate professional PDF
   return buildProfessionalPdf(data, config, logoBase64);

@@ -411,6 +411,7 @@ exports.exportReport = async (req, res) => {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': pdfBuffer.length,
+      'Cache-Control': 'no-store',
     });
     res.send(pdfBuffer);
   } catch (err) {

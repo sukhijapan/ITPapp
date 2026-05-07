@@ -1,18 +1,8 @@
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const db = require('../db');
 
-const s3 = new S3Client({});
-const S3_BUCKET = process.env.S3_BUCKET;
-
 const ALLOWED_MIMETYPES = ['image/png', 'image/jpeg'];
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB = 2,097,152 bytes
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
-/**
- * Validates logo file constraints.
- * @param {string} mimetype
- * @param {number} fileSize
- * @returns {{valid: boolean, error?: string}}
- */
 function validateLogoFile(mimetype, fileSize) {
   if (!ALLOWED_MIMETYPES.includes(mimetype)) {
     return { valid: false, error: 'Invalid file type. Only PNG and JPEG images are accepted.' };
@@ -23,28 +13,6 @@ function validateLogoFile(mimetype, fileSize) {
   return { valid: true };
 }
 
-/**
- * Encodes a file buffer as a base64 data URI.
- * Resize and JPEG conversion are done client-side before upload (Canvas API),
- * so the server receives a pre-processed JPEG blob and only needs to encode it.
- * @param {Buffer} fileBuffer
- * @param {string} mimetype
- * @returns {string} base64 data URI
- */
-function encodeBase64(fileBuffer, mimetype) {
-  return `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
-}
-
-/**
- * Validates and uploads a project logo.
- * Handles replacement by deleting the old S3 object if one exists.
- * @param {number} projectId - Target project ID
- * @param {Buffer} fileBuffer - Raw image file buffer
- * @param {string} mimetype - File MIME type (e.g., 'image/png')
- * @param {number} fileSize - File size in bytes
- * @returns {Promise<{s3Key: string, base64DataUri: string}>}
- * @throws {Error} if file type or size invalid
- */
 async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
   const validation = validateLogoFile(mimetype, fileSize);
   if (!validation.valid) {
@@ -53,75 +21,36 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
     throw error;
   }
 
-  // Check if project already has a logo — best-effort delete old S3 object
-  try {
-    const existing = await db.query(
-      'SELECT logo_s3_key FROM projects WHERE id = $1',
-      [projectId]
-    );
-    if (existing.rows.length > 0 && existing.rows[0].logo_s3_key) {
-      await s3.send(new DeleteObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: existing.rows[0].logo_s3_key,
-      })).catch((err) => {
-        console.warn(`[LogoService] Failed to delete old logo from S3: ${err.message}`);
-      });
-    }
-  } catch (err) {
-    console.warn(`[LogoService] Could not check for existing logo: ${err.message}`);
-  }
+  // Client converts to JPEG before upload (Canvas API). Server encodes as-is.
+  const base64DataUri = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
 
-  // Client already converted to JPEG before upload — just encode for DB storage
-  const base64DataUri = encodeBase64(fileBuffer, mimetype);
+  console.log(`[LogoService] Storing logo for project ${projectId}: mimetype=${mimetype} bufferBytes=${fileBuffer.length} base64Chars=${base64DataUri.length}`);
 
-  // Best-effort S3 upload — PDF generation uses the base64 in DB, not S3
-  const ext = mimetype === 'image/png' ? 'png' : 'jpg';
-  const s3Key = `logos/${projectId}/logo.${ext}`;
-  let storedS3Key = null;
-  if (S3_BUCKET) {
-    try {
-      await s3.send(new PutObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: s3Key,
-        Body: fileBuffer,
-        ContentType: mimetype,
-      }));
-      storedS3Key = s3Key;
-    } catch (err) {
-      console.warn(`[LogoService] S3 upload failed (logo saved to DB only): ${err.message}`);
-    }
-  }
-
-  // Store base64 and timestamp in DB — this is the authoritative copy for PDF generation
   await db.query(
     `UPDATE projects
-     SET logo_s3_key = $1, logo_mime_type = $2, logo_base64 = $3, logo_uploaded_at = NOW()
-     WHERE id = $4`,
-    [storedS3Key, mimetype, base64DataUri, projectId]
+     SET logo_mime_type = $1, logo_base64 = $2, logo_uploaded_at = NOW()
+     WHERE id = $3`,
+    [mimetype, base64DataUri, projectId]
   );
 
-  return { s3Key: storedS3Key, base64DataUri };
+  console.log(`[LogoService] Logo stored successfully for project ${projectId}`);
+  return { base64DataUri };
 }
 
-/**
- * Retrieves the base64 data URI for a project's logo.
- * @param {number} projectId
- * @returns {Promise<string|null>} base64 data URI or null if no logo
- */
 async function getLogoBase64(projectId) {
   const result = await db.query(
     'SELECT logo_base64 FROM projects WHERE id = $1',
     [projectId]
   );
-  if (result.rows.length === 0) return null;
-  return result.rows[0].logo_base64 || null;
+  if (result.rows.length === 0) {
+    console.log(`[LogoService] getLogoBase64: no project row found for id=${projectId}`);
+    return null;
+  }
+  const val = result.rows[0].logo_base64;
+  console.log(`[LogoService] getLogoBase64 project=${projectId}: ${val ? `found (${val.length} chars)` : 'null/empty'}`);
+  return val || null;
 }
 
-/**
- * Retrieves logo metadata (hasLogo flag + uploadedAt timestamp) for a project.
- * @param {number} projectId
- * @returns {Promise<{hasLogo: boolean, uploadedAt: string|null}>}
- */
 async function getLogoMeta(projectId) {
   const result = await db.query(
     'SELECT logo_base64, logo_uploaded_at FROM projects WHERE id = $1',
@@ -135,33 +64,10 @@ async function getLogoMeta(projectId) {
   };
 }
 
-/**
- * Deletes the existing logo for a project (S3 + DB).
- * @param {number} projectId
- */
 async function deleteLogo(projectId) {
-  // Fetch current S3 key
-  const result = await db.query(
-    'SELECT logo_s3_key FROM projects WHERE id = $1',
-    [projectId]
-  );
-
-  if (result.rows.length > 0 && result.rows[0].logo_s3_key) {
-    // Delete from S3
-    try {
-      await s3.send(new DeleteObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: result.rows[0].logo_s3_key,
-      }));
-    } catch (err) {
-      console.warn(`[LogoService] Failed to delete logo from S3: ${err.message}`);
-    }
-  }
-
-  // Clear logo columns in DB
   await db.query(
-    `UPDATE projects 
-     SET logo_s3_key = NULL, logo_mime_type = NULL, logo_base64 = NULL, logo_uploaded_at = NULL
+    `UPDATE projects
+     SET logo_mime_type = NULL, logo_base64 = NULL, logo_uploaded_at = NULL
      WHERE id = $1`,
     [projectId]
   );

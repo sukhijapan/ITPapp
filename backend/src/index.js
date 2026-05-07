@@ -23,6 +23,10 @@ const logoRoutes = require('./routes/logos');
 const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 
+// Lambda / API Gateway sits behind a load balancer that sets X-Forwarded-For.
+// Without trust proxy, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
+
 // In production, CORS is handled by Lambda Function URL — adding it here too
 // would create duplicate Access-Control-Allow-Origin headers that browsers reject.
 if (!isProduction) {

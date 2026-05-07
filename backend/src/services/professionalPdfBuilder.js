@@ -83,16 +83,19 @@ function renderHeader(doc, data, config, logoBase64) {
   const logoX = MARGIN;
   const logoY = headerTop;
 
+  console.log(`[PdfBuilder] renderHeader: logoBase64=${logoBase64 ? `present (${logoBase64.length} chars, starts: ${logoBase64.slice(0, 30)})` : 'null'} companyName="${config.companyName}"`);
+
   if (logoBase64) {
     try {
-      // logoBase64 is always stored as JPEG (resizeAndEncode converts at upload time)
       const format = logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
-      // Extract actual pixel dimensions from the base64 image so aspect ratio is correct
       const imgProps = doc.getImageProperties(logoBase64);
+      console.log(`[PdfBuilder] getImageProperties: width=${imgProps.width} height=${imgProps.height} fileType=${imgProps.fileType}`);
       const dims = calculateLogoDimensions(imgProps.width, imgProps.height);
+      console.log(`[PdfBuilder] addImage: format=${format} x=${logoX} y=${logoY} w=${dims.width} h=${dims.height}`);
       doc.addImage(logoBase64, format, logoX, logoY, dims.width, dims.height);
+      console.log('[PdfBuilder] addImage succeeded');
     } catch (e) {
-      console.warn('[ProfessionalPdfBuilder] Failed to render logo, falling back to company name text:', e.message);
+      console.error('[PdfBuilder] Logo render failed, falling back to company name:', e.message);
       renderCompanyNameText(doc, config.companyName, logoX, logoY);
     }
   } else {
