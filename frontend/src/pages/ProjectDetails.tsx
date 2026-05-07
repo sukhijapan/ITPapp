@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { Plus, X, Library, Trash2, XCircle } from 'lucide-react';
@@ -30,6 +30,10 @@ const ProjectDetails: React.FC = () => {
   const [instances, setInstances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [form, setForm] = useState<CreateFormState>(emptyForm);
   const [creating, setCreating] = useState(false);
@@ -131,7 +135,7 @@ const ProjectDetails: React.FC = () => {
       <h1>{project?.name}</h1>
       <p>{project?.description}</p>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div ref={errorBannerRef} className="error-banner">{error}</div>}
 
       <section className="section">
         <div className="section-header">

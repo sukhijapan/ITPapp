@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { ArrowLeft, ShieldAlert, CheckCircle, Clock, FileText, MapPin, Save } from 'lucide-react';
@@ -84,6 +84,10 @@ const NCRDetail: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState('');
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
   const [saveMsg, setSaveMsg] = useState('');
   const [dirty, setDirty] = useState(false);
 
@@ -207,7 +211,7 @@ const NCRDetail: React.FC = () => {
         </div>
       </header>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div ref={errorBannerRef} className="error-banner">{error}</div>}
 
       {/* ── Save bar ── */}
       <div className="ncr-save-bar">

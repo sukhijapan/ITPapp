@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle, Clock, XCircle, FileDown, AlertTriangle, ShieldCheck, Send, Paperclip, FileText, FileSpreadsheet, File, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,11 @@ const ITPExecution: React.FC = () => {
   } = useITPExecution(id);
 
   useEffect(() => { fetchITP(); }, [fetchITP]);
+
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
 
   if (loading) return <div className="loading">Loading ITP Details...</div>;
   if (!itp) return (
@@ -132,7 +137,7 @@ const ITPExecution: React.FC = () => {
         <div className="legend-item"><span className="type-badge sp">SP</span> Surveillance</div>
       </section>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div ref={errorBannerRef} className="error-banner">{error}</div>}
 
       <div className="staged-points">
         {Object.keys(groupedPoints).map(section => (
