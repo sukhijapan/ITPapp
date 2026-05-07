@@ -50,6 +50,8 @@ test.describe('Role-Based Access Control @critical', () => {
 
     // Assert — CANNOT access User Management (or page loads without admin link on dashboard)
     await page.goto('/admin/users');
+    // Wait for the page to finish loading before checking URL/content
+    await page.waitForLoadState('networkidle').catch(() => {});
     const url = page.url();
     const isRedirected = !url.includes('/admin/users');
     const hasError = await page.locator('.error, .access-denied, [role="alert"]').isVisible().catch(() => false);

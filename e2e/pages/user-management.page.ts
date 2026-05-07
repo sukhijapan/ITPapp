@@ -23,6 +23,8 @@ export class UserManagementPage {
 
   async goto() {
     await this.page.goto('/admin/users');
+    // Wait for page data to finish loading (invite button only appears after loading=false)
+    await this.page.waitForSelector('button:has-text("Invite User")', { timeout: 30000 });
   }
 
   async inviteUser(email: string, role: string, fullName: string = 'Test User') {
@@ -30,6 +32,8 @@ export class UserManagementPage {
     const modal = this.page.locator('.modal-overlay');
     await modal.locator('input[type="email"]').fill(email);
     await modal.locator('input[type="text"]').first().fill(fullName);
+    // Wait for RoleSelect to finish loading roles (select becomes enabled)
+    await modal.waitForSelector('select:not([disabled])', { timeout: 15000 });
     await modal.locator('select').selectOption({ label: role });
     await modal.locator('button[type="submit"]').click();
   }

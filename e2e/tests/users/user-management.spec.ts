@@ -121,6 +121,8 @@ test.describe('User Management', () => {
 
     // Act — attempt to navigate directly to user management
     await page.goto('/admin/users');
+    // Wait for the page to finish loading before checking URL/content
+    await page.waitForLoadState('networkidle').catch(() => {});
 
     // Assert — user is redirected away or sees access denied or page loads without admin actions
     // The backend allows any authenticated user to list users, but the dashboard

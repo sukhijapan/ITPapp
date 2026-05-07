@@ -43,6 +43,13 @@ export class ITPExecutionPage {
   async rejectPoint(pointIndex: number) {
     const card = this.pointCards.nth(pointIndex);
     await card.locator('button.btn-reject').click();
+    // A rejection choice modal opens — choose "Raise NCR"
+    const ncrForm = this.page.locator('.ncr-form');
+    await ncrForm.waitFor({ state: 'visible', timeout: 5000 });
+    await ncrForm.locator('button', { hasText: /Raise NCR/i }).first().click();
+    // Fill NCR description and submit
+    await ncrForm.locator('textarea').fill('Non-conformance found during E2E testing');
+    await ncrForm.locator('button.btn-save').click();
   }
 
   async submitForReview() {

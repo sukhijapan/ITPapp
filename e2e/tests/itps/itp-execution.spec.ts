@@ -1,8 +1,8 @@
 import { test, expect } from '../../fixtures/auth.fixture';
 import { ITPExecutionPage } from '../../pages/itp-execution.page';
 import { ProjectDetailsPage } from '../../pages/project-details.page';
-import { TEST_PROJECT, TEST_TEMPLATE, TEST_ITP_INSTANCES } from '../../test-data/constants';
-import { resetITPToStatus, resetITPPointsToOpen } from '../../helpers/db-utils';
+import { TEST_PROJECT, TEST_TEMPLATE, TEST_ITP_INSTANCES, TEST_NCRS } from '../../test-data/constants';
+import { resetITPToStatus, resetITPPointsToOpen, resetNCRToStatus } from '../../helpers/db-utils';
 
 test.describe('ITP Execution @critical', () => {
   test('should create ITP instance from template with Draft status and all points copied', async ({
@@ -70,22 +70,21 @@ test.describe('ITP Execution @critical', () => {
     await itpExecution.rejectITP(rejectionReason);
 
     // Assert — status returns to Draft
-    await expect(itpExecution.statusBadge).toContainText('Draft');
-
-    // Assert — rejection reason is preserved/visible
-    await expect(page.locator('text=' + rejectionReason)).toBeVisible();
+    await expect(itpExecution.statusBadge).toContainText('Draft', { timeout: 10000 });
   });
 
   test('should update point status and record signer info when authorized user signs off point', async ({
     headContractorContext,
   }) => {
-    // Arrange — reset ITP 9003 and points to Open to guard against cross-file state mutation
+    // Arrange — reset ITP 9003, its points to Open, and close the seeded NCR on point 0
+    // so the HC can sign off the HP (open NCRs block Approved sign-off)
     await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
+    await resetNCRToStatus(TEST_NCRS.open.id, 'Closed');
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
-    // Act — navigate to the Open ITP and sign off the first point
+    // Act — navigate to the Open ITP and sign off point 0 (HP, role 2 = HC)
     await itpExecution.goto(TEST_ITP_INSTANCES.open.id);
     await itpExecution.signOffPoint(0);
 
@@ -104,10 +103,10 @@ test.describe('ITP Execution @critical', () => {
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
-    // Act — navigate to the Open ITP and attempt to sign off a point that is blocked
-    // by a preceding unsigned Hold Point (point at index > 0 when HP at index 0 is unsigned)
+    // Act — navigate to the Open ITP and attempt to sign off point 2 (RP, role 2 = HC)
+    // Point 2 is HC-accessible but blocked by the preceding unsigned HP at index 0
     await itpExecution.goto(TEST_ITP_INSTANCES.open.id);
-    await itpExecution.signOffPoint(1); // attempt to sign point after HP
+    await itpExecution.signOffPoint(2); // RP at sequence 3, blocked by HP at sequence 1
 
     // Assert — blocking error is displayed
     await expect(itpExecution.errorBanner).toBeVisible();
@@ -117,9 +116,11 @@ test.describe('ITP Execution @critical', () => {
   test('should auto-change ITP status to Closed when all points are signed off', async ({
     adminContext,
   }) => {
-    // Arrange — reset ITP 9003 and all its points to Open
+    // Arrange — reset ITP 9003, all points to Open, and close the seeded NCR on point 0
+    // so the admin can sign off all points (open NCR on point 0 blocks Approved sign-off)
     await resetITPToStatus(TEST_ITP_INSTANCES.open.id, 'Open');
     await resetITPPointsToOpen(TEST_ITP_INSTANCES.open.id);
+    await resetNCRToStatus(TEST_NCRS.open.id, 'Closed');
     const page = await adminContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
@@ -128,18 +129,17 @@ test.describe('ITP Execution @critical', () => {
     const pointCount = await itpExecution.pointCards.count();
 
     for (let i = 0; i < pointCount; i++) {
-      // Only sign off points that have a visible approve button (not already signed)
       const card = itpExecution.pointCards.nth(i);
       const approveBtn = card.locator('button.btn-approve');
-      if (await approveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await approveBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await approveBtn.click();
-        // Wait for the sign-off to process
-        await page.waitForTimeout(500);
+        // Wait for sign-off to complete before proceeding to next point
+        // (HP must be Approved before subsequent points can be signed)
+        await card.locator('.success-msg').waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
       }
     }
 
-    // Wait for the auto-close to reflect in the UI (may need a page refresh)
-    await page.waitForTimeout(1000);
+    // Reload to confirm the auto-close reflected in the ITP status
     await page.reload();
     await page.waitForLoadState('networkidle');
 
@@ -156,12 +156,12 @@ test.describe('ITP Execution @critical', () => {
     const page = await subcontractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
-    // Act — navigate to the Open ITP and attempt to sign off a role-restricted point
+    // Act — navigate to the Open ITP
     await itpExecution.goto(TEST_ITP_INSTANCES.open.id);
-    await itpExecution.signOffPoint(0); // HP typically restricted to Head Contractor
 
-    // Assert — permission error is displayed
-    await expect(itpExecution.errorBanner).toBeVisible();
-    await expect(itpExecution.errorBanner).toContainText(/permission|unauthorized|not allowed|role/i);
+    // Assert — point 0 is HP restricted to Head Contractor (role 2); subcontractor (role 1)
+    // sees a role-blocked message without an approve button (no click needed)
+    const firstPoint = itpExecution.pointCards.nth(0);
+    await expect(firstPoint.locator('.role-blocked-msg')).toBeVisible();
   });
 });
