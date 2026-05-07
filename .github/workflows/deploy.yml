@@ -1,0 +1,67 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write # Required for OIDC auth with AWS
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+      - name: Install infrastructure dependencies
+        run: npm ci
+        working-directory: infrastructure
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - name: CDK Deploy
+        run: npx cdk deploy --require-approval never --outputs-file cdk-outputs.json
+        working-directory: infrastructure
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+
+      - name: Run database migrations
+        run: |
+          API_URL=$(jq -r '.ItpAppStack.ApiUrl' infrastructure/cdk-outputs.json)
+          echo "Triggering migrations at $API_URL"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${API_URL}api/admin/migrate" \
+            -H "Content-Type: application/json" \
+            -d "{\"key\": \"$ADMIN_API_KEY\"}")
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Migration failed with HTTP $RESPONSE"
+            exit 1
+          fi
+          echo "Migrations completed successfully"
+        env:
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
