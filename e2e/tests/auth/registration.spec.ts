@@ -50,6 +50,8 @@ async function createInvitationToken(
 }
 
 test.describe('Authentication - Registration', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('should allow registration with valid invitation token and redirect to dashboard', async ({
     page,
   }) => {

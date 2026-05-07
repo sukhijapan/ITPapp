@@ -102,6 +102,8 @@ async function seedNotificationWithToken(options: {
 }
 
 test.describe('Witness Point Notifications', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('Subcontractor raises WP notification with planned time and recipients — status is Pending', async ({
     subcontractorContext,
   }) => {

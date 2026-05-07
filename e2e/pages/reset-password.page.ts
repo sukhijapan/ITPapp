@@ -19,8 +19,20 @@ export class ResetPasswordPage {
 
   async goto(token: string) {
     await this.page.goto(`/reset-password/${token}`);
-    // Wait for the page to fully load — either the password form or an error/invalid message
-    await this.page.waitForSelector('input[type="password"], h1:has-text("Invalid"), h1:has-text("Expired"), h1:has-text("Successful")', { timeout: 30000 });
+    
+    // Wait for either the form or an error message
+    const heading = this.page.getByRole('heading', { name: /Set New Password|Invalid or Expired Link/ });
+    const verifying = this.page.getByText('Verifying...');
+
+    await Promise.race([
+      heading.waitFor({ state: 'visible', timeout: 15000 }),
+      verifying.waitFor({ state: 'visible', timeout: 15000 })
+    ]).catch(() => {});
+
+    // If still showing "Verifying...", wait for it to resolve
+    if (await verifying.isVisible()) {
+      await verifying.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+    }
   }
 
   async resetPassword(password: string) {

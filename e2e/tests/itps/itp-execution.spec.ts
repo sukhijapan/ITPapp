@@ -5,6 +5,8 @@ import { TEST_PROJECT, TEST_TEMPLATE, TEST_ITP_INSTANCES, TEST_NCRS } from '../.
 import { resetITPToStatus, resetITPPointsToOpen, resetNCRToStatus } from '../../helpers/db-utils';
 
 test.describe('ITP Execution @critical', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('should create ITP instance from template with Draft status and all points copied', async ({
     headContractorContext,
   }) => {

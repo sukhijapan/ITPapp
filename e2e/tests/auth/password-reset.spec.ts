@@ -46,6 +46,8 @@ async function requestResetAndGetToken(email: string): Promise<string> {
 }
 
 test.describe('Authentication - Password Reset', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('should show generic success message on forgot password form regardless of email existence', async ({
     page,
   }) => {

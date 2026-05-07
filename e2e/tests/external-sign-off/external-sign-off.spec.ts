@@ -101,6 +101,8 @@ async function seedExternalSignOffToken(options: {
 }
 
 test.describe('External Sign-Off', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('internal user requests external sign-off — token generated and request recorded', async ({
     headContractorContext,
   }) => {

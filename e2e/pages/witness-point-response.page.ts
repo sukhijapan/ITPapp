@@ -29,8 +29,21 @@ export class WitnessPointResponsePage {
 
   async goto(token: string) {
     await this.page.goto(`/wp-response/${token}`);
-    // Wait for the page to finish loading (either shows content or error)
-    await this.page.waitForSelector('h1, .bg-red-50', { timeout: 10000 });
+    
+    const heading = this.page.getByRole('heading', { name: 'Witness Point Inspection Notification' });
+    const error = this.page.getByText('Response Link Error');
+    const loading = this.page.getByText('Loading...');
+
+    await Promise.race([
+      heading.waitFor({ state: 'visible', timeout: 10000 }),
+      error.waitFor({ state: 'visible', timeout: 10000 }),
+      loading.waitFor({ state: 'visible', timeout: 10000 })
+    ]).catch(() => {});
+
+    // If still showing "Loading...", wait for it to resolve
+    if (await loading.isVisible()) {
+      await loading.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+    }
   }
 
   async getNotificationContext(): Promise<string> {

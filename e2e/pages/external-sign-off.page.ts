@@ -23,11 +23,24 @@ export class ExternalSignOffPage {
 
   async goto(token: string) {
     await this.page.goto(`/external-sign-off/${token}`);
-    // Wait for the page to render — the component uses inline styles (no CSS classes)
-    // so we wait for either the heading text or the error text to appear
-    await this.page.waitForSelector('text=Inspection Sign-off Required, text=Sign-off Link Error, text=Loading', { timeout: 15000 });
+    
+    // Wait for either the content, an error, or the loading indicator to appear
+    const heading = this.page.getByRole('heading', { name: 'Inspection Sign-off Required' });
+    const error = this.page.getByText('Sign-off Link Error');
+    const loading = this.page.getByText('Loading...');
+
+    await Promise.race([
+      heading.waitFor({ state: 'visible', timeout: 15000 }),
+      error.waitFor({ state: 'visible', timeout: 15000 }),
+      loading.waitFor({ state: 'visible', timeout: 15000 })
+    ]).catch(() => {
+      throw new Error(`Timed out waiting for external sign-off page to load for token: ${token}`);
+    });
+
     // If still showing "Loading...", wait for it to resolve
-    await this.page.locator('text=Loading').waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+    if (await loading.isVisible()) {
+      await loading.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+    }
   }
 
   async getPointContext(): Promise<string> {
