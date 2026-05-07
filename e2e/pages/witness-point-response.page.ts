@@ -22,7 +22,7 @@ export class WitnessPointResponsePage {
     this.reasonTextarea = page.locator('textarea');
     this.rescheduleTimeInput = page.locator('input[type="datetime-local"]');
     this.errorMessage = page.locator('text=Response Link Error').locator('..');
-    this.successMessage = page.locator('h2');
+    this.successMessage = page.locator('h2', { hasText: /Attendance Confirmed|Attendance Declined|Reschedule Requested/ });
     this.notificationContext = page.locator('.bg-blue-50');
     this.heading = page.locator('h1', { hasText: 'Witness Point Inspection Notification' });
   }
@@ -39,6 +39,7 @@ export class WitnessPointResponsePage {
 
   async confirm() {
     await this.confirmButton.click();
+    await this.submitButton.waitFor({ state: 'visible', timeout: 5000 });
     await this.submitButton.click();
   }
 

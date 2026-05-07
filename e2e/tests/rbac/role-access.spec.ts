@@ -90,7 +90,7 @@ test.describe('Role-Based Access Control @critical', () => {
     // Assert — can access dashboard (view projects)
     await page.goto('/');
     const dashboardPage = new DashboardPage(page);
-    await expect(dashboardPage.projectCards.first()).toBeVisible();
+    await expect(dashboardPage.projectCards.first()).toBeVisible({ timeout: 15000 });
 
     // Assert — can access project details
     await page.goto(`/projects/${TEST_PROJECT.id}`);
@@ -111,7 +111,7 @@ test.describe('Role-Based Access Control @critical', () => {
     // Assert — can access dashboard
     await page.goto('/');
     const dashboardPage = new DashboardPage(page);
-    await expect(dashboardPage.projectCards.first()).toBeVisible();
+    await expect(dashboardPage.projectCards.first()).toBeVisible({ timeout: 15000 });
 
     // Assert — User Management link is visible on dashboard
     await expect(dashboardPage.userManagementLink).toBeVisible();

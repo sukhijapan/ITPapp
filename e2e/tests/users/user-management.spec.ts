@@ -38,8 +38,9 @@ test.describe('User Management', () => {
     // Assert — heading is visible
     await expect(userManagement.heading).toBeVisible();
 
-    // Assert — user table is visible with rows
+    // Assert — user table is visible with rows (wait for data to load)
     await expect(userManagement.userTable).toBeVisible();
+    await expect(userManagement.userRows.first()).toBeVisible({ timeout: 10000 });
     const rowCount = await userManagement.userRows.count();
     expect(rowCount).toBeGreaterThan(0);
 

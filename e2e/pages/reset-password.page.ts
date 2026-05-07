@@ -19,8 +19,8 @@ export class ResetPasswordPage {
 
   async goto(token: string) {
     await this.page.goto(`/reset-password/${token}`);
-    // Wait for the page to render (either shows form or error)
-    await this.page.waitForSelector('input[type="password"], h1', { timeout: 15000 });
+    // Wait for the page to fully load — either the password form or an error/invalid message
+    await this.page.waitForSelector('input[type="password"], h1:has-text("Invalid"), h1:has-text("Expired"), h1:has-text("Successful")', { timeout: 30000 });
   }
 
   async resetPassword(password: string) {

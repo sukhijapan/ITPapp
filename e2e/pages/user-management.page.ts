@@ -32,14 +32,16 @@ export class UserManagementPage {
     const modal = this.page.locator('.modal-overlay');
     await modal.locator('input[type="email"]').fill(email);
     await modal.locator('input[type="text"]').first().fill(fullName);
-    // Wait for RoleSelect to finish loading roles (select becomes enabled)
-    await modal.locator('select:not([disabled])').waitFor({ state: 'visible', timeout: 15000 });
+    // Wait for RoleSelect to finish loading roles — the component replaces
+    // a disabled select with an enabled one containing role options
+    await modal.locator('select option:not(:only-child)').first().waitFor({ state: 'attached', timeout: 15000 });
     await modal.locator('select').selectOption({ label: role });
     await modal.locator('button[type="submit"]').click();
   }
 
   async deactivateUser(email: string) {
     const row = this.userRows.filter({ hasText: email });
+    await row.first().waitFor({ state: 'visible', timeout: 10000 });
     await row.locator('button[aria-label="User actions"]').click();
     await this.page.locator('.dropdown-menu button', { hasText: 'Edit User' }).click();
     const modal = this.page.locator('.modal-overlay');
@@ -49,6 +51,7 @@ export class UserManagementPage {
 
   async activateUser(email: string) {
     const row = this.userRows.filter({ hasText: email });
+    await row.first().waitFor({ state: 'visible', timeout: 10000 });
     await row.locator('button[aria-label="User actions"]').click();
     await this.page.locator('.dropdown-menu button', { hasText: 'Edit User' }).click();
     const modal = this.page.locator('.modal-overlay');

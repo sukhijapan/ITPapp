@@ -23,8 +23,11 @@ export class ExternalSignOffPage {
 
   async goto(token: string) {
     await this.page.goto(`/external-sign-off/${token}`);
-    // Wait for the page to render (either shows form or error)
-    await this.page.waitForSelector('h1, [class*="error"]', { timeout: 15000 });
+    // Wait for the page to render — the component uses inline styles (no CSS classes)
+    // so we wait for either the heading text or the error text to appear
+    await this.page.waitForSelector('text=Inspection Sign-off Required, text=Sign-off Link Error, text=Loading', { timeout: 15000 });
+    // If still showing "Loading...", wait for it to resolve
+    await this.page.locator('text=Loading').waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
   }
 
   async getPointContext(): Promise<string> {
