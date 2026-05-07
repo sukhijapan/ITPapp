@@ -4,6 +4,7 @@ import api from '../services/api';
 import { Plus, X, Library, Trash2, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WPConfigSection from '../components/WPConfigSection';
+import ReportConfigSection from '../components/ReportConfigSection';
 
 interface CreateFormState {
   name: string;
@@ -229,6 +230,11 @@ const ProjectDetails: React.FC = () => {
       {/* Witness Point Settings - visible to Head Contractor (roleId 2) and Admin (roleId 4) */}
       {user && (user.role_id === 2 || user.role_id === 4) && (
         <WPConfigSection projectId={parseInt(id!)} />
+      )}
+
+      {/* Report Configuration - visible to Head Contractor (roleId 2) and Admin (roleId 4) */}
+      {user && (user.role_id === 2 || user.role_id === 4) && (
+        <ReportConfigSection projectId={parseInt(id!)} />
       )}
 
       {/* Create Instance Modal */}
