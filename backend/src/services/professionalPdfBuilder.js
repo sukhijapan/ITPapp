@@ -138,16 +138,19 @@ function renderHeader(doc, data, config, logoBase64) {
   // ── Centre column: Document title ──
   const centreX = PAGE_WIDTH / 2;
   const titleY = headerTop + 8;
+  // Right metadata column starts at PAGE_WIDTH-MARGIN-45; leave a 5mm gap
+  const titleMaxWidth = (PAGE_WIDTH - MARGIN - 45 - 5 - centreX) * 2;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(...HEADER_TEXT);
-  doc.text(safe(data.instance.name), centreX, titleY, { align: 'center' });
+  const titleLines = doc.splitTextToSize(safe(data.instance.name), titleMaxWidth);
+  doc.text(titleLines, centreX, titleY, { align: 'center' });
 
   if (config.projectSubtitle) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(config.projectSubtitle, centreX, titleY + 5, { align: 'center' });
+    doc.text(config.projectSubtitle, centreX, titleY + titleLines.length * 5, { align: 'center' });
   }
 
   // ── Right column: Metadata table ──
@@ -223,27 +226,38 @@ function renderMetadataTable(doc, data, config, startY) {
   const rightLabelX = MARGIN + CONTENT_WIDTH / 2;
   const rightValueX = MARGIN + CONTENT_WIDTH / 2 + 30;
 
+  // Max width for each value column before it would overflow into the other column
+  const leftValueMaxWidth = rightLabelX - leftValueX - 5;
+  const rightValueMaxWidth = PAGE_WIDTH - MARGIN - rightValueX - 2;
+
   const maxRows = Math.max(leftCol.length, rightCol.length);
+  let rowY = y;
 
   for (let i = 0; i < maxRows; i++) {
-    const rowY = y + i * lineHeight;
+    let leftLines = [];
+    let rightLines = [];
 
     if (leftCol[i]) {
       doc.setFont('helvetica', 'bold');
       doc.text(leftCol[i][0], leftLabelX, rowY);
       doc.setFont('helvetica', 'normal');
-      doc.text(leftCol[i][1], leftValueX, rowY);
+      leftLines = doc.splitTextToSize(leftCol[i][1], leftValueMaxWidth);
+      doc.text(leftLines, leftValueX, rowY);
     }
 
     if (rightCol[i]) {
       doc.setFont('helvetica', 'bold');
       doc.text(rightCol[i][0], rightLabelX, rowY);
       doc.setFont('helvetica', 'normal');
-      doc.text(rightCol[i][1], rightValueX, rowY);
+      rightLines = doc.splitTextToSize(rightCol[i][1], rightValueMaxWidth);
+      doc.text(rightLines, rightValueX, rowY);
     }
+
+    // Advance by however many lines the taller side needed
+    rowY += Math.max(leftLines.length || 1, rightLines.length || 1) * lineHeight;
   }
 
-  y += maxRows * lineHeight + 4;
+  y = rowY + 4;
 
   // Draw a line below metadata
   doc.setDrawColor(200, 200, 200);
