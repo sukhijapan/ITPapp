@@ -85,8 +85,11 @@ function renderHeader(doc, data, config, logoBase64) {
 
   if (logoBase64) {
     try {
+      // logoBase64 is always stored as JPEG (resizeAndEncode converts at upload time)
       const format = logoBase64.includes('image/png') ? 'PNG' : 'JPEG';
-      const dims = calculateLogoDimensions(LOGO_MAX_WIDTH * 5, LOGO_MAX_HEIGHT * 5);
+      // Extract actual pixel dimensions from the base64 image so aspect ratio is correct
+      const imgProps = doc.getImageProperties(logoBase64);
+      const dims = calculateLogoDimensions(imgProps.width, imgProps.height);
       doc.addImage(logoBase64, format, logoX, logoY, dims.width, dims.height);
     } catch (e) {
       console.warn('[ProfessionalPdfBuilder] Failed to render logo, falling back to company name text:', e.message);

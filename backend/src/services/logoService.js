@@ -1,4 +1,5 @@
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const sharp = require('sharp');
 const db = require('../db');
 
 const s3 = new S3Client({});
@@ -24,16 +25,21 @@ function validateLogoFile(mimetype, fileSize) {
 }
 
 /**
- * Encodes an image buffer to a base64 data URI string.
- * Since we cannot use sharp (no new dependencies), we store the base64 as-is
- * and let the PDF builder handle display sizing constraints.
+ * Resizes an image to max 400px wide, flattens transparency onto a white
+ * background, and returns a JPEG base64 data URI safe for jsPDF in Node.js.
+ * JPEG is used because jsPDF handles it correctly across all platforms and
+ * RGBA transparency in PNG causes corrupted rendering in Node.js jsPDF.
  * @param {Buffer} imageBuffer
- * @param {string} mimetype
- * @returns {Promise<string>} base64 data URI
+ * @returns {Promise<string>} base64 data URI (always image/jpeg)
  */
-async function resizeAndEncode(imageBuffer, mimetype) {
-  const base64 = imageBuffer.toString('base64');
-  return `data:${mimetype};base64,${base64}`;
+async function resizeAndEncode(imageBuffer) {
+  const jpegBuffer = await sharp(imageBuffer)
+    .resize({ width: 400, withoutEnlargement: true })
+    .flatten({ background: { r: 255, g: 255, b: 255 } }) // white bg for transparency
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
 }
 
 /**
@@ -72,8 +78,8 @@ async function uploadLogo(projectId, fileBuffer, mimetype, fileSize) {
     console.warn(`[LogoService] Could not check for existing logo: ${err.message}`);
   }
 
-  // Generate base64 data URI for PDF embedding (always succeeds — no external deps)
-  const base64DataUri = await resizeAndEncode(fileBuffer, mimetype);
+  // Generate base64 data URI for PDF embedding: resize + flatten transparency → JPEG
+  const base64DataUri = await resizeAndEncode(fileBuffer);
 
   // Best-effort S3 upload — PDF generation uses the base64 in DB, not S3
   const ext = mimetype === 'image/png' ? 'png' : 'jpg';
