@@ -31,7 +31,8 @@ test.describe('ITP Execution @critical', () => {
   test('should change status to Pending Review when Subcontractor submits Draft ITP', async ({
     subcontractorContext,
   }) => {
-    // Arrange
+    // Arrange — reset to Draft so retries don't find it already Pending Review
+    await resetITPToStatus(TEST_ITP_INSTANCES.draft.id, 'Draft');
     const page = await subcontractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
@@ -46,7 +47,8 @@ test.describe('ITP Execution @critical', () => {
   test('should change status to Open when Head Contractor approves Pending Review ITP', async ({
     headContractorContext,
   }) => {
-    // Arrange
+    // Arrange — reset to Pending Review so retries don't find it in Draft (left by the reject test)
+    await resetITPToStatus(TEST_ITP_INSTANCES.pendingReview.id, 'Pending Review');
     const page = await headContractorContext.newPage();
     const itpExecution = new ITPExecutionPage(page);
 
