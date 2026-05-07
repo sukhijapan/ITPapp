@@ -50,6 +50,8 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          CDK_DEFAULT_ACCOUNT: '989346119403'
+          CDK_DEFAULT_REGION: ap-southeast-2
 
       - name: Run database migrations
         run: |
