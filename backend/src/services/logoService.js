@@ -25,10 +25,11 @@ function validateLogoFile(mimetype, fileSize) {
 }
 
 /**
- * Resizes an image to max 400px wide, flattens transparency onto a white
- * background, and returns a JPEG base64 data URI safe for jsPDF in Node.js.
- * JPEG is used because jsPDF handles it correctly across all platforms and
- * RGBA transparency in PNG causes corrupted rendering in Node.js jsPDF.
+ * Resizes an image to max 400px wide and returns a JPEG base64 data URI.
+ * Always outputs JPEG regardless of input format because jsPDF's PNG decoder
+ * in Node.js (a JS port) produces corrupted pixel output for any PNG file.
+ * jsPDF's JPEG decoder works correctly in Node.js. Transparent pixels are
+ * composited on white so they render cleanly on the PDF's white background.
  * @param {Buffer} imageBuffer
  * @returns {Promise<string>} base64 data URI (always image/jpeg)
  */
